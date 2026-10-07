@@ -1,14 +1,44 @@
-##Spring Configuration
 server:
   port: 8080
 spring:
   application:
-    name: wallet-service
+    name: "wallet-service"
   devtools:
     add-properties: false
   h2:
     console:
       enabled: true
-      path: /h2
+      path: "/h2"
   profiles:
-    include:
+    include: null
+  datasource:
+    url: "jdbc:h2:mem:test"
+    username: "sa"
+    password: "pass"
+    driverClassName: "org.h2.Driver"
+  jpa:
+    databasePlatform: "org.hibernate.dialect.H2Dialect"
+  redis:
+    host: "localhost"
+    port: 6379
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,prometheus"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+cors:
+  allowed-origins: "http://localhost:4200,http://localhost:8080"
+commons:
+  jms:
+    output-concurrency: 10
+    output-queue: "DEV.QUEUE.1"
+    producer-ttl: 0
+    reactive: false
+ibm:
+  mq:
+    channel: "DEV.APP.SVRCONN"
+    user: "app"
