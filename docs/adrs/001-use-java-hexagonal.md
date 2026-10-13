@@ -50,6 +50,4 @@ All services share this structure; no shared libraries except a minimal `finova-
 - **Wave 2**: Independent deploy verified via pipeline (change Wallet, deploy only Wallet)
 
 ## References
-- design.md → Decisions #1, #2, #6
-- specs/transfer/orchestration/spec.md (saga orchestration in domain)
-- specs/wallet/balance-read/spec.md (CQRS in Wallet domain)
+- `docs/spec.md` — service catalog, data schemas, REST/AsyncAPI contracts, WHEN/THEN scenarios per feature.
