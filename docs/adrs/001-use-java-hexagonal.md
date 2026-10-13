@@ -1,53 +1,97 @@
-# ADR 001: Use Java with Hexagonal Architecture per Service
+# ADR 001: Use of Java 21 with Spring Boot and Hexagonal Architecture per Service
 
-## Status
-Accepted — 2026-10-12
+**Status:** Accepted — 2026-10-12
 
-## Context
-Finova requires a microservices architecture where each service (Transfer, Wallet, Identity, Audit, Notification) must:
-- Own its data (Database per Service pattern)
-- Be independently deployable and scalable
-- Encapsulate complex domain logic (saga orchestration, balance invariants, idempotency)
-- Support long-term maintainability as financial rules evolve
-- Allow the team (5 members) to work in parallel with clear boundaries
+- **Context and Problem:**
+  Finova is migrating to microservices, and its current chained synchronous
+  communication causes partial transfers and double debits. The new
+  architecture must make the following possible: The team has decided on five services (Transfer, Wallet, Identity, Audit,
+  Notification), and each must:
+  - Own its data (Database per Service pattern).
+  - Be independently deployable and scalable.
+  - Encapsulate complex domain logic: saga orchestration with compensation,
+    balance invariants and idempotency rules.
+  - Remain maintainable as financial rules evolve.
+  - Allow the 5 team members to work in parallel with clear boundaries.
 
-The team has strong Java/Spring Boot expertise. The case study mandates Spring Boot + Spring Cloud Gateway in the C4 diagram.
+  The team has strong Java/Spring Boot expertise and has chosen Spring Cloud
+  Gateway as the API Gateway.
 
-## Decision
-We will implement each microservice in **Java 21 with Spring Boot 3.x** following **Hexagonal Architecture (Ports & Adapters)**, with a clear separation:
-- **Domain core**: aggregates, value objects, domain events, saga orchestrators (no framework deps)
-- **Ports (interfaces)**: `WalletRepository`, `MessagePublisher`, `IdempotencyChecker`, `AuthValidator`
-- **Adapters**: Spring Data JPA (PostgreSQL), RabbitMQ publisher, Redis client, Spring Security filter
+- **Considered Alternatives:**
+  - **Layered (Controller-Service-Repository):** familiar and simple for CRUD,
+    but domain logic leaks into services, it is hard to test in isolation and
+    it couples to Spring. Rejected: Finova's core domain (saga, invariants)
+    needs isolation from the framework.
+  - **Clean Architecture (Use Cases + Entities):** similar benefits to
+    Hexagonal, but more ceremony (a Use Case class per operation) and extra
+    indirection. Rejected: Hexagonal maps directly to Spring's
+    `@Component`/`@Repository` with less boilerplate.
+  - **Modular monolith (Spring Modulith):** single deployment with enforced
+    module boundaries. Rejected: it does not provide the independent
+    deployment and per-service data ownership the team chose for this
+    microservices migration.
+  - **Kotlin + Spring Boot:** concise, null-safe, with coroutines. Rejected:
+    the team has no Kotlin experience and the learning curve would delay
+    Waves 1 and 2; Java 21 (records, pattern matching, virtual threads)
+    closes most of the gap.
+  - **Go / Node.js / .NET:** various strengths. Rejected: no team expertise
+    and onboarding risk.
 
-All services share this structure; no shared libraries except a minimal `finova-common` kernel (value objects, exceptions, test fixtures).
+- **Decision:**
+  Each microservice is implemented in **Java 21 with Spring Boot 3.x**
+  following **Hexagonal Architecture (Ports & Adapters)**:
+  - **Domain core:** aggregates, value objects, domain events and saga
+    orchestrators, with no framework dependencies.
+  - **Ports (interfaces):** `WalletRepository`, `MessagePublisher`,
+    `IdempotencyChecker`, `AuthValidator`.
+  - **Adapters:** Spring Data JPA (PostgreSQL), RabbitMQ publisher, Redis
+    client, Spring Security filter.
 
-## Alternatives Considered
+  All services share this structure. The only shared library is a minimal
+  `finova-common` kernel (value objects, exceptions, test fixtures).
 
-| Alternative | Pros | Cons | Why Rejected |
-|-------------|------|------|--------------|
-| **Layered (Controller-Service-Repository)** | Familiar, simple for CRUD | Domain logic leaks into services; hard to test in isolation; coupling to Spring | Finova's core domain (saga, invariants) needs isolation from framework |
-| **Clean Architecture (Use Cases + Entities)** | Similar benefits to Hexagonal | More ceremony (Use Case classes for every operation); "Interactor" indirection adds noise | Hexagonal maps 1:1 to Spring's `@Component`/`@Repository`; less boilerplate |
-| **Modulith (Spring Modulith)** | Single deploy, module boundaries enforced | Doesn't satisfy "independently deployable" requirement for Wave 2 | Case study explicitly requires microservices with separate datastores |
-| **Kotlin + Spring Boot** | Concise, null-safety, coroutines | Team has zero Kotlin experience; learning curve delays Wave 1/2 | Java 21 (records, pattern matching, virtual threads) closes most gaps |
-| **Go / Node.js / .NET** | Various strengths | No team expertise; hiring/onboarding risk | Team constraint is decisive |
+- **Trade-offs:**
+  - *Positives (What we gain):*
+    - **Testability:** pure domain logic gives fast unit tests with no Spring
+      context.
+    - **Replaceable adapters:** RabbitMQ → Kafka, JPA → R2DBC or Redis →
+      Valkey without touching the domain.
+    - **Parallel work:** 5 developers, 5 services with identical structure and
+      minimal merge conflicts.
+    - **Spring ecosystem:** Spring Cloud Gateway, Spring Data, Spring
+      Security, Actuator and OpenTelemetry integrate natively.
+    - **Java 21:** records for commands/events, pattern matching for saga
+      state, virtual threads for blocking I/O (RabbitMQ/JDBC).
+  - *Negatives (Risks / What we lose):*
+    - **Boilerplate (ports + adapters per service):** mitigated with a shared
+      `finova-common` scaffolding script and ArchUnit tests that enforce
+      layer boundaries.
+    - **Distributed transaction complexity:** mitigated at architecture level
+      with the Saga + Outbox pattern (ADR 002).
+    - **Operational overhead (5 JVMs):** mitigated by deploying everything
+      with Docker Compose.
 
-## Consequences
-### Positive
-- **Testability**: Domain logic pure → unit tests fast, no Spring context needed
-- **Replaceable adapters**: Swap RabbitMQ → Kafka, JPA → R2DBC, Redis → Valkey without touching domain
-- **Parallel work**: 5 devs = 5 services, each with identical structure, minimal merge conflicts
-- **Spring ecosystem**: Spring Cloud Gateway, Spring Data, Spring Security, Actuator, OpenTelemetry integration native
-- **Java 21 features**: Records for commands/events, pattern matching for saga state, virtual threads for blocking I/O (RabbitMQ/JDBC)
-
-### Negative (Risks / Mitigations)
-- **Boilerplate** (ports + adapters per service) → Mitigation: shared `finova-common` scaffolding script; ArchUnit tests enforce layer boundaries
-- **Distributed transactions complexity** → Mitigation: Saga + Outbox pattern (ADR 002) handles this at architecture level
-- **Operational overhead (5 JVMs)** → Mitigation: Docker Compose for local; k8s manifests shared template; GraalVM native images if cold-start matters
+- **Final Justification:**
+  Finova's central problem is correctness under failure and retries:
+  partial transfers and double debits. Hexagonal Architecture keeps the rules
+  that solve it (idempotency checks, saga orchestration with compensation,
+  balance invariants) in a framework-free domain core. That lets the team
+  test them exhaustively without infrastructure, which directly supports
+  mandatory features 3 (idempotent transfers), 4 (Saga/Outbox with automatic
+  compensation) and 5 (append-only audit of every attempt). Ports isolate the
+  broker, cache and database, so those technologies can change without
+  rewriting financial rules. Java 21 with Spring Boot is the best fit because
+  the team already masters it and it natively provides the gateway, security,
+  observability and messaging integrations the project needs, avoiding the
+  delay of a new language. Five services with identical structure let all
+  members work in parallel from Wave 1 to Wave 2.
 
 ## Validation
-- **Week 2**: ArchUnit test passes on all 5 services (no domain → adapter deps)
-- **Week 4**: All domain unit tests run < 5s per service, 0 Spring context loads
-- **Wave 2**: Independent deploy verified via pipeline (change Wallet, deploy only Wallet)
+- **Week 2:** ArchUnit tests pass on all 5 services (no domain → adapter dependencies).
+- **Week 4:** domain unit tests run in under 5 s per service, with 0 Spring context loads.
+- **Wave 2:** independent deployment verified through the pipeline (change Wallet, deploy only Wallet).
 
 ## References
-- `docs/spec.md` — service catalog, data schemas, REST/AsyncAPI contracts, WHEN/THEN scenarios per feature.
+- design.md → Decisions #1, #2, #6
+- specs/transfer/orchestration/spec.md (saga orchestration in domain)
+- specs/wallet/balance-read/spec.md (CQRS in Wallet domain)
