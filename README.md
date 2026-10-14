@@ -35,11 +35,6 @@ Finova's current architecture performs chained synchronous HTTP calls (User-Serv
 /docs
   spec.md                 # OpenAPI / AsyncAPI contracts (Wave 1)
   /adrs                   # Architecture Decision Records
-    001-api-gateway-idempotency.md
-    002-saga-vs-2pc.md
-    003-outbox-pattern.md
-    004-redis-balance-cache.md
-    005-append-only-ledger.md
   /assets                 # C4 diagrams (PNG/JPG)
 /services                 # (Wave 2) microservices source
 /gateway                  # (Wave 2) API Gateway
@@ -49,8 +44,14 @@ DEVELOPMENT_PLAN.md       # roadmap for Waves 1 and 2
 
 ## Team
 
-- Team name: _TBD_
-- Members: _TBD_
+- Team name: Grupo #4
+- Members:
+Alejandro Aguilar García
+Ricardo Amortegui Espinosa
+Juan Esteban Moreno Cuadros
+Juan Camilo Duarte Vasco
+Sebastian García Velez
+
 - Tech Spec (Google Docs): **TS-004** — shared with `brandoncadavid1@gmail.com` (Editor)
 - Professor repo access: `brandoncadavid1@gmail.com` (Read)
 
@@ -59,4 +60,4 @@ DEVELOPMENT_PLAN.md       # roadmap for Waves 1 and 2
 - Wave 1 — Planning, Design, Specification (SDD): **in progress**
 - Wave 2 — Implementation (monorepo, docker-compose): **pending**
 
-See `DEVELOPMENT_PLAN.md` for the detailed roadmap.
+
