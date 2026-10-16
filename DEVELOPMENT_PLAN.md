@@ -1,5 +1,7 @@
 # Development Plan — Finova (ARQ2-2026-TS-004)
 
+> Contracts in `docs/spec.md` and decisions in `docs/adrs` take precedence over this plan.
+
 Two-wave plan aligned with the project rules. Every milestone has a concrete artifact in this repo and all team members are expected to produce verifiable commits in both waves.
 
 ---
@@ -72,13 +74,13 @@ Monorepo under this same repo. Documentation stays intact under `/docs`.
 ### Target folder structure
 
 ```
-/gateway/                 # API Gateway (Node/Express or Kong+plugin)
+/gateway/                 # API Gateway (Spring Cloud Gateway)
 /services/
-  auth/
-  wallet/
-  transfer-orchestrator/
-  ledger/
-  notification/
+  identity-service/
+  wallet-service/
+  transfer-service/
+  audit-service/
+  notification-service/
 /libs/                    # shared schemas, generated clients
 /infra/
   rabbitmq/
@@ -89,7 +91,7 @@ docker-compose.yml
 
 ### Milestone 2.1 — Baseline scaffolding (week 1)
 
-- Pick stack (proposal: TypeScript + NestJS for services; Postgres per service; Redis; RabbitMQ).
+- Stack (ADR 001): Java 21 + Spring Boot 3.x per service (hexagonal), Spring Cloud Gateway, PostgreSQL 16 per service, Redis 7, RabbitMQ.
 - `docker-compose.yml` boots: gateway, 5 services, Postgres (one DB per service), Redis, RabbitMQ with management UI.
 - CI: lint + typecheck + unit tests on every push.
 
@@ -116,20 +118,20 @@ docker-compose.yml
 
 ### Milestone 2.5 — Feature 4: Saga + Outbox with compensation
 
-- `transfer-orchestrator` state machine: `REQUESTED → DEBITED → CREDITED → COMPLETED`, with compensations `DEBITED → COMPENSATING → REVERSED`.
+- `transfer-service` state machine: `PENDING → DEBITED → COMPLETED`, `PENDING → REJECTED`, compensation `DEBITED → COMPENSATING → REVERSED` (see spec §3.3).
 - Wallet writes always go through Outbox (same DB transaction).
 - Outbox dispatcher publishes to RabbitMQ with at-least-once semantics.
 - Idempotent consumers: deduplicate by `(transferId, step)`.
 - Timeout + retry policies; dead-letter queue for manual review.
 - Chaos test: kill wallet-service between debit and credit → expect automatic reversal within SLA.
 
-### Milestone 2.6 — Feature 5: Append-only Ledger
+### Milestone 2.6 — Feature 5: Append-only Audit
 
-- `ledger-service` consumes every transfer event and inserts rows into an **append-only** table:
+- `audit-service` consumes every transfer event and inserts rows into an **append-only** table:
   - `REVOKE UPDATE, DELETE` on the table for the service role.
   - Row contains: `event_id`, `transfer_id`, `type`, `amount`, `actor`, `prev_hash`, `hash`, `occurred_at`.
   - Hash-chain each row so tampering is detectable.
-- `GET /ledger/transfers/{id}` returns the full timeline for audit.
+- `GET /audit/records?transferId=` returns the full timeline; `GET /audit/verify` checks the hash chain.
 
 ### Milestone 2.7 — Hardening & demo
 
