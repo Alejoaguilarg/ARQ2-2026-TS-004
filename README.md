@@ -37,6 +37,7 @@ Finova performs chained synchronous HTTP calls (`User-Service -> Wallet-Service 
 | PostgreSQL 16 ×5 | Database per service | `identity_db`, `wallet_db`, `transfer_db`, `audit_db`, `notification_db` |
 | RabbitMQ | Message broker | `wallet.commands`, `wallet.events`, `transfer.events`, `audit.events` |
 | Redis 7 | Cache / store | Idempotency keys, sessions and revocation, rate limits, balance read model |
+| Prometheus, Loki, Tempo, Grafana, Grafana Alloy | Observability (ADR 007) | Metrics, logs and distributed traces of every container in one UI |
 
 ## Mandatory features and where they live
 
@@ -53,7 +54,7 @@ Finova performs chained synchronous HTTP calls (`User-Service -> Wallet-Service 
 ```
 /docs
   spec.md                       # REST + async contracts, WHEN/THEN scenarios (Wave 1)
-  /adrs                         # Architecture Decision Records (001-006)
+  /adrs                         # Architecture Decision Records (001-007)
   /assets                       # C4 diagrams (PNG) + draw.io source
 /services                       # (Wave 2) microservices source
   wallet-service/               # scaffolded (Bancolombia scaffold, hexagonal layout)

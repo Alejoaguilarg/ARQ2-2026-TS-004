@@ -13,6 +13,7 @@ Wave 2 code is reviewed against this file. Any change to a contract must update 
 4. [REST APIs](#4-rest-apis)
 5. [Asynchronous events and integration contracts](#5-asynchronous-events-and-integration-contracts)
 6. [Requirements and scenarios (WHEN / THEN)](#6-requirements-and-scenarios-when--then)
+7. [Observability contract](#7-observability-contract)
 
 ---
 
@@ -28,6 +29,7 @@ Finova replaces the chained synchronous call `User-Service -> Wallet-Service -> 
 | **Wallet Service** | Wallet | Wallet aggregate, non-negative balance invariant, conditional atomic debit, credit, reversal, ledger entries, balance read model in Redis (CQRS). | `wallet_db` + Redis | `wallet.events`, `audit.events` | `wallet.commands` |
 | **Audit Service** | Audit | Append-only, hash-chained record of every attempt and outcome. Read API for compliance. | `audit_db` | — | `audit.events` |
 | **Notification Service** | Notification | Push, email and SMS from outcome events. Best effort, never on the critical path. | `notification_db` | — | `transfer.events` |
+| **Observability stack** | Cross-cutting | Prometheus (metrics), Loki (logs), Tempo (traces), Grafana (UI), Grafana Alloy (collector). See §7 and ADR 007. | Own volumes | — | Metrics, logs and OTLP traces from every container |
 
 End-to-end transfer flow:
 
@@ -413,3 +415,51 @@ components:
 - **WHEN** someone runs `UPDATE` or `DELETE` on `audit_records` **THEN** the database rejects it (privileges revoked and trigger).
 - **WHEN** a record is altered outside the application **THEN** `GET /audit/verify` returns `valid: false` with the first broken `seq`.
 - **WHEN** the Audit Service is down **THEN** transfers keep working, audit events wait in `audit-service.records`, and they are stored once the service recovers.
+
+## 7. Observability contract
+
+Every service and the Gateway must comply with this contract (ADR 007).
+
+### 7.1 Metrics (Prometheus)
+
+- Endpoint: `GET /actuator/prometheus` (Micrometer), scraped every 15 s. RabbitMQ (`rabbitmq_prometheus` plugin) and Redis (`redis_exporter`) are scraped too.
+
+| Metric | Type | Labels | Producer |
+|---|---|---|---|
+| `finova_transfers_total` | counter | `status` (COMPLETED, REJECTED, REVERSED) | Transfer |
+| `finova_saga_duration_seconds` | histogram | `outcome` | Transfer |
+| `finova_compensations_total` | counter | `reason` | Transfer |
+| `finova_outbox_pending` | gauge | `service` | Transfer, Wallet |
+| `finova_idempotency_rejections_total` | counter | `result` (IN_PROGRESS, REPLAYED, KEY_REUSED) | Gateway |
+| `finova_balance_cache_requests_total` | counter | `result` (hit, miss) | Wallet |
+| `http_server_requests_seconds` | histogram | `uri`, `status` | all (Micrometer default) |
+
+### 7.2 Logs (Loki)
+
+- JSON to stdout, one line per event, collected by Grafana Alloy.
+- Mandatory fields: `timestamp`, `level`, `service`, `traceId`, `spanId`, `correlationId`, `transferId` (when present), `message`.
+- Never logged: passwords, PINs, OTPs, tokens, full request bodies.
+
+### 7.3 Traces (Tempo)
+
+- OpenTelemetry Java agent in every service; OTLP to Alloy, forwarded to Tempo.
+- W3C `traceparent` propagated in HTTP headers and in AMQP message headers, so one transfer = one trace (Gateway → Transfer → RabbitMQ → Wallet → Transfer → Notification/Audit).
+- Span attributes: `transfer.id`, `idempotency.key`, `saga.step`.
+
+### 7.4 Dashboards and alerts (Grafana)
+
+| Panel / alert | Query basis | Alert threshold |
+|---|---|---|
+| Transfers by final state | `finova_transfers_total` | — |
+| Saga duration p95 | `finova_saga_duration_seconds` | > 2 s for 5 min |
+| Compensations per minute | `finova_compensations_total` | > 5 / min |
+| Outbox lag | `finova_outbox_pending` | > 100 for 2 min |
+| DLQ depth | RabbitMQ queue metrics `*.dlq` | > 0 |
+| Balance read p99 and cache hit ratio | `http_server_requests_seconds`, `finova_balance_cache_requests_total` | p99 > 50 ms |
+| 5xx rate | `http_server_requests_seconds_count{status=~"5.."}` | > 1 % |
+
+### 7.5 Scenarios (WHEN / THEN)
+
+- **WHEN** a transfer ends `REVERSED` **THEN** searching its `transferId` in Grafana shows its logs from every service and one trace with the debit, the failed credit and the reversal.
+- **WHEN** a message lands in any DLQ **THEN** a Grafana alert fires within 1 minute.
+- **WHEN** the outbox relay stops **THEN** `finova_outbox_pending` grows and the outbox-lag alert fires.
