@@ -48,7 +48,6 @@ Finova's current architecture performs chained synchronous HTTP calls (User-Serv
 /services                 # (Wave 2) microservices source
 /gateway                  # (Wave 2) API Gateway
 docker-compose.yml        # (Wave 2) local orchestration
-DEVELOPMENT_PLAN.md       # roadmap for Waves 1 and 2
 ```
 
 ## Team
