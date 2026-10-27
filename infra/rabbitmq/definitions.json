@@ -1,0 +1,309 @@
+{
+  "exchanges": [
+    {
+      "name": "wallet.commands",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "transfer.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "audit.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "wallet.commands.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "wallet.commands.q.retry"
+      }
+    },
+    {
+      "name": "wallet.commands.q.retry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-message-ttl": 5000,
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "wallet.commands.q"
+      }
+    },
+    {
+      "name": "wallet.commands.q.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "transfer.wallet-events.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "transfer.wallet-events.q.retry"
+      }
+    },
+    {
+      "name": "transfer.wallet-events.q.retry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-message-ttl": 5000,
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "transfer.wallet-events.q"
+      }
+    },
+    {
+      "name": "transfer.wallet-events.q.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "wallet.balance-projection.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "wallet.balance-projection.q.retry"
+      }
+    },
+    {
+      "name": "wallet.balance-projection.q.retry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-message-ttl": 5000,
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "wallet.balance-projection.q"
+      }
+    },
+    {
+      "name": "wallet.balance-projection.q.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "notification.transfer-events.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "notification.transfer-events.q.retry"
+      }
+    },
+    {
+      "name": "notification.transfer-events.q.retry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-message-ttl": 5000,
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "notification.transfer-events.q"
+      }
+    },
+    {
+      "name": "notification.transfer-events.q.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "audit.attempts.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "audit.attempts.q.retry",
+        "x-single-active-consumer": true
+      }
+    },
+    {
+      "name": "audit.attempts.q.retry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-message-ttl": 5000,
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "audit.attempts.q"
+      }
+    },
+    {
+      "name": "audit.attempts.q.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.q",
+      "destination_type": "queue",
+      "routing_key": "debit",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.q",
+      "destination_type": "queue",
+      "routing_key": "credit",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.q",
+      "destination_type": "queue",
+      "routing_key": "reverse",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "transfer.wallet-events.q",
+      "destination_type": "queue",
+      "routing_key": "wallet.debited",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "transfer.wallet-events.q",
+      "destination_type": "queue",
+      "routing_key": "wallet.debit-rejected",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "transfer.wallet-events.q",
+      "destination_type": "queue",
+      "routing_key": "wallet.credited",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "transfer.wallet-events.q",
+      "destination_type": "queue",
+      "routing_key": "wallet.credit-failed",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "transfer.wallet-events.q",
+      "destination_type": "queue",
+      "routing_key": "wallet.debit-reversed",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "wallet.balance-projection.q",
+      "destination_type": "queue",
+      "routing_key": "wallet.balance-changed",
+      "arguments": {}
+    },
+    {
+      "source": "transfer.events",
+      "vhost": "/",
+      "destination": "notification.transfer-events.q",
+      "destination_type": "queue",
+      "routing_key": "transfer.completed",
+      "arguments": {}
+    },
+    {
+      "source": "transfer.events",
+      "vhost": "/",
+      "destination": "notification.transfer-events.q",
+      "destination_type": "queue",
+      "routing_key": "transfer.rejected",
+      "arguments": {}
+    },
+    {
+      "source": "transfer.events",
+      "vhost": "/",
+      "destination": "notification.transfer-events.q",
+      "destination_type": "queue",
+      "routing_key": "transfer.reversed",
+      "arguments": {}
+    },
+    {
+      "source": "audit.events",
+      "vhost": "/",
+      "destination": "audit.attempts.q",
+      "destination_type": "queue",
+      "routing_key": "audit.attempt",
+      "arguments": {}
+    }
+  ]
+}
