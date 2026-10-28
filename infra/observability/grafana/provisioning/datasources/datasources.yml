@@ -13,3 +13,24 @@ datasources:
     uid: loki
     access: proxy
     url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # Spring Boot 3 log correlation: [application,traceId,spanId]
+        - name: traceId
+          matcherRegex: '\[[\w-]*,([0-9a-f]{32}),'
+          datasourceUid: tempo
+          url: '$${__value.raw}'
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      nodeGraph:
+        enabled: true
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true

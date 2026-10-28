@@ -24,6 +24,10 @@ x-app-env: &app-env
   SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
   SPRING_JPA_DATABASEPLATFORM: org.hibernate.dialect.PostgreSQLDialect
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
+  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"
+  # Take effect once a service adds micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp.
+  MANAGEMENT_OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
   JAVA_OPTS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=70
 
 x-app-healthcheck: &app-healthcheck
@@ -248,7 +252,7 @@ services:
     volumes:
       - ./infra/notification-provider-mock/mappings:/home/wiremock/mappings:ro
 
-  # ---------------------------------------------------------------- observability (Prometheus + Loki + Grafana)
+  # ---------------------------------------------------------------- observability (Prometheus + Loki + Tempo + Grafana)
   prometheus:
     image: prom/prometheus:v3.5.0
     restart: unless-stopped
@@ -269,6 +273,18 @@ services:
     command: ["-config.file=/etc/loki/local-config.yaml"]
     volumes: [loki-data:/loki]
 
+  tempo:
+    image: grafana/tempo:2.8.2
+    restart: unless-stopped
+    networks: [backend]
+    # The named volume is created root-owned and the image runs as uid 10001.
+    user: root
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./infra/observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+
+  # Ships container logs to Loki and receives OTLP traces (4317 gRPC, 4318 HTTP) for Tempo.
   alloy:
     image: grafana/alloy:v1.10.0
     restart: unless-stopped
@@ -277,7 +293,7 @@ services:
     volumes:
       - ./infra/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on: [loki]
+    depends_on: [loki, tempo]
 
   grafana:
     image: grafana/grafana:12.1.0
@@ -291,7 +307,7 @@ services:
     volumes:
       - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
-    depends_on: [prometheus, loki]
+    depends_on: [prometheus, loki, tempo]
 
 networks:
   backend:
@@ -306,4 +322,5 @@ volumes:
   rabbitmq-data:
   prometheus-data:
   loki-data:
+  tempo-data:
   grafana-data:
