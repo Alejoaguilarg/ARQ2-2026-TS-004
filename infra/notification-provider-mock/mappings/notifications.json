@@ -1,0 +1,13 @@
+{
+  "mappings": [
+    {
+      "request": { "method": "POST", "urlPathPattern": "/(push|email|sms)" },
+      "response": {
+        "status": 202,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "status": "ACCEPTED", "providerMessageId": "{{randomValue type='UUID'}}" },
+        "transformers": ["response-template"]
+      }
+    }
+  ]
+}
