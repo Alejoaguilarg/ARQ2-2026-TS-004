@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verify;
 class RabbitMQMessagePublisherTest {
 
     private static final OutboundMessage MESSAGE = new OutboundMessage(
-            "msg-1", "corr-1", "transfer.events", "transfer.debited", "{\"transferId\":\"t-1\"}");
+            "msg-1", "corr-1", "transfer.events", "transfer.completed", "{\"transferId\":\"t-1\"}");
 
     private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
     private final RabbitMQMessagePublisher publisher =
@@ -39,7 +39,7 @@ class RabbitMQMessagePublisherTest {
         publisher.publish(MESSAGE);
 
         ArgumentCaptor<Message> sent = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("transfer.events"), eq("transfer.debited"), sent.capture(), any(CorrelationData.class));
+        verify(rabbitTemplate).send(eq("transfer.events"), eq("transfer.completed"), sent.capture(), any(CorrelationData.class));
         MessageProperties properties = sent.getValue().getMessageProperties();
         assertThat(properties.getMessageId()).isEqualTo("msg-1");
         assertThat(properties.getCorrelationId()).isEqualTo("corr-1");

@@ -4,9 +4,9 @@ dependencies {
     implementation project(':model')
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'io.micrometer:micrometer-registry-prometheus'
 }
-
 
 configurations{
 	implementation.exclude group: 'org.springframework.boot', module: 'spring-boot-starter-tomcat'

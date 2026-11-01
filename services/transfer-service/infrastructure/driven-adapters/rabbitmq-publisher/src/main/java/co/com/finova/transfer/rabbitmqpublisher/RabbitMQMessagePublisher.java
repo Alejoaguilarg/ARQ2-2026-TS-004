@@ -1,8 +1,7 @@
 package co.com.finova.transfer.rabbitmqpublisher;
 
-import co.com.finova.transfer.model.message.MessagePublishException;
-import co.com.finova.transfer.model.message.OutboundMessage;
 import co.com.finova.transfer.model.message.gateways.MessagePublisher;
+import co.com.finova.transfer.model.message.envelope.MessageEnvelope;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
@@ -30,38 +29,40 @@ public class RabbitMQMessagePublisher implements MessagePublisher {
     }
 
     @Override
-    public void publish(OutboundMessage message) {
-        CorrelationData correlation = new CorrelationData(message.messageId());
-        rabbitTemplate.send(message.exchange(), message.routingKey(), toAmqp(message), correlation);
-        awaitConfirm(message, correlation);
+    public void publish(MessageEnvelope envelope) {
+        CorrelationData correlation = new CorrelationData(envelope.getMessageId());
+        Message message = toAmqp(envelope);
+        rabbitTemplate.send(envelope.getExchange(), envelope.getRoutingKey(), message, correlation);
+        awaitConfirm(envelope, correlation);
     }
 
-    private void awaitConfirm(OutboundMessage message, CorrelationData correlation) {
+    private void awaitConfirm(MessageEnvelope envelope, CorrelationData correlation) {
         CorrelationData.Confirm confirm;
         try {
             confirm = correlation.getFuture().get(confirmTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new MessagePublishException("Interrupted waiting for confirm of " + message.messageId(), e);
+            throw new RuntimeException("Interrupted waiting for confirm of " + envelope.getMessageId(), e);
         } catch (ExecutionException | TimeoutException e) {
-            throw new MessagePublishException("No broker confirm for " + message.messageId(), e);
+            throw new RuntimeException("No broker confirm for " + envelope.getMessageId(), e);
         }
         if (!confirm.isAck()) {
-            throw new MessagePublishException("Broker nacked " + message.messageId() + ": " + confirm.getReason());
+            throw new RuntimeException("Broker nacked " + envelope.getMessageId() + ": " + confirm.getReason());
         }
         if (correlation.getReturned() != null) {
-            throw new MessagePublishException("Unroutable " + message.messageId() + " to "
-                    + message.exchange() + "/" + message.routingKey());
+            throw new RuntimeException("Unroutable " + envelope.getMessageId() + " to "
+                    + envelope.getExchange() + "/" + envelope.getRoutingKey());
         }
     }
 
-    private static Message toAmqp(OutboundMessage message) {
+    private Message toAmqp(MessageEnvelope envelope) {
         MessageProperties properties = new MessageProperties();
-        properties.setMessageId(message.messageId());
-        properties.setCorrelationId(message.correlationId());
+        properties.setMessageId(envelope.getMessageId());
+        properties.setCorrelationId(envelope.getCorrelationId());
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
         properties.setContentEncoding(StandardCharsets.UTF_8.name());
         properties.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-        return new Message(message.payload().getBytes(StandardCharsets.UTF_8), properties);
+        String payload = envelope.getPayload().toString();
+        return new Message(payload.getBytes(StandardCharsets.UTF_8), properties);
     }
 }
