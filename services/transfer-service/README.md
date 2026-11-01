@@ -1,47 +1,43 @@
-# Proyecto Base Implementando Clean Architecture
+# Transfer Service - Base Project with Clean Architecture
 
-## Antes de Iniciar
+## Getting Started
 
-Empezaremos por explicar los diferentes componentes del proyectos y partiremos de los componentes externos, continuando con los componentes core de negocio (dominio) y por último el inicio y configuración de la aplicación.
+We will explain the different project components starting from external components, continuing with core business components (domain), and finally the application startup and configuration.
 
-Lee el artículo [Clean Architecture — Aislando los detalles](https://medium.com/bancolombia-tech/clean-architecture-aislando-los-detalles-4f9530f35d7a)
+Read the article [Clean Architecture — Isolating the Details](https://medium.com/bancolombia-tech/clean-architecture-aislando-los-detalles-4f9530f35d7a)
 
-# Arquitectura
+## Architecture
 
 ![Clean Architecture](https://miro.medium.com/max/1400/1*ZdlHz8B0-qu9Y-QO3AXR_w.png)
 
 ## Domain
 
-Es el módulo más interno de la arquitectura, pertenece a la capa del dominio y encapsula la lógica y reglas del negocio mediante modelos y entidades del dominio.
+This is the innermost module of the architecture. It belongs to the domain layer and encapsulates business logic and rules through domain models and entities.
 
 ## Usecases
 
-Este módulo gradle perteneciente a la capa del dominio, implementa los casos de uso del sistema, define lógica de aplicación y reacciona a las invocaciones desde el módulo de entry points, orquestando los flujos hacia el módulo de entities.
+This Gradle module belongs to the domain layer. It implements system use cases, defines application logic, and responds to invocations from entry points, orchestrating flows toward entity modules.
 
 ## Infrastructure
 
 ### Helpers
 
-En el apartado de helpers tendremos utilidades generales para los Driven Adapters y Entry Points.
+The helpers section contains general utilities for Driven Adapters and Entry Points.
 
-Estas utilidades no están arraigadas a objetos concretos, se realiza el uso de generics para modelar comportamientos
-genéricos de los diferentes objetos de persistencia que puedan existir, este tipo de implementaciones se realizan
-basadas en el patrón de diseño [Unit of Work y Repository](https://medium.com/@krzychukosobudzki/repository-design-pattern-bc490b256000)
+These utilities are not tied to concrete objects; generics are used to model generic behaviors of different persistence objects. These implementations follow the [Unit of Work and Repository](https://medium.com/@krzychukosobudzki/repository-design-pattern-bc490b256000) design pattern.
 
-Estas clases no puede existir solas y debe heredarse su compartimiento en los **Driven Adapters**
+These classes cannot exist alone; their behavior must be inherited by **Driven Adapters**.
 
 ### Driven Adapters
 
-Los driven adapter representan implementaciones externas a nuestro sistema, como lo son conexiones a servicios rest,
-soap, bases de datos, lectura de archivos planos, y en concreto cualquier origen y fuente de datos con la que debamos
-interactuar.
+Driven adapters represent external implementations to our system, such as REST connections, SOAP, databases, flat file reading, and in general any data source we must interact with.
 
 ### Entry Points
 
-Los entry points representan los puntos de entrada de la aplicación o el inicio de los flujos de negocio.
+Entry points represent application entry points or the start of business flows.
 
 ## Application
 
-Este módulo es el más externo de la arquitectura, es el encargado de ensamblar los distintos módulos, resolver las dependencias y crear los beans de los casos de use (UseCases) de forma automática, inyectando en éstos instancias concretas de las dependencias declaradas. Además inicia la aplicación (es el único módulo del proyecto donde encontraremos la función “public static void main(String[] args)”.
+This is the outermost module of the architecture. It is responsible for assembling the different modules, resolving dependencies, and creating beans for use cases (UseCases) automatically, injecting concrete instances of declared dependencies. It also starts the application (this is the only module where we find the `public static void main(String[] args)` function).
 
-**Los beans de los casos de uso se disponibilizan automaticamente gracias a un '@ComponentScan' ubicado en esta capa.**
+**Use case beans are made available automatically through a `@ComponentScan` located in this layer.**
