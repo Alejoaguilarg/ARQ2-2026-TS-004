@@ -1,6 +1,6 @@
 package co.com.finova.wallet.jpa.processedmessage;
 
-import co.com.finova.wallet.jpa.json.MessageJsonMapper;
+import co.com.finova.wallet.messagejson.MessageJsonMapper;
 import co.com.finova.wallet.model.message.MessageType;
 import co.com.finova.wallet.model.message.payload.MessagePayload;
 import co.com.finova.wallet.model.processedmessage.ProcessedMessage;

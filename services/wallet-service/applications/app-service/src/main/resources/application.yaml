@@ -28,6 +28,14 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+    listener:
+      simple:
+        # Spec §4.2: manual acks; a rejected delivery is never requeued, so the queue dead-letters it to
+        # its .retry queue (5 s) and it comes back. The listeners only consume existing queues.
+        acknowledge-mode: "manual"
+        default-requeue-rejected: false
+        missing-queues-fatal: true
+        prefetch: 10
 management:
   endpoints:
     web:
@@ -40,3 +48,12 @@ management:
 adapters:
   rabbitmq:
     confirm-timeout: "5s"
+    # Decision S1: retries after the first delivery (3 = 4 deliveries), then the .dlq.
+    # Override with ADAPTERS_RABBITMQ_MAX_RETRIES.
+    max-retries: 3
+  outbox:
+    # Decision S3: one batch every 100 ms (ADR 002 targets a saga under 1 s, ~4 relay hops per transfer).
+    # Override with ADAPTERS_OUTBOX_RELAY_ENABLED, ADAPTERS_OUTBOX_RELAY_INTERVAL and ADAPTERS_OUTBOX_BATCH_SIZE.
+    relay-enabled: true
+    relay-interval: "100ms"
+    batch-size: 100

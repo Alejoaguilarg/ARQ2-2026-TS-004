@@ -9,4 +9,9 @@ public class ContractViolationException extends RuntimeException {
     public ContractViolationException(String message) {
         super(message);
     }
+
+    /** Keeps the original error (for example, a JSON parse error) for the logs. */
+    public ContractViolationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

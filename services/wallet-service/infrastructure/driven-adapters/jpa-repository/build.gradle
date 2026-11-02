@@ -1,14 +1,14 @@
 dependencies {
     implementation project(':model')
+    // JSON of outbox payloads and stored results (JSONB) comes from the shared contract mapper.
+    implementation project(':message-json')
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
-    // JSON of outbox payloads and stored results (JSONB): money as text, RFC 3339 timestamps.
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     runtimeOnly 'org.postgresql:postgresql'
 
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
 }

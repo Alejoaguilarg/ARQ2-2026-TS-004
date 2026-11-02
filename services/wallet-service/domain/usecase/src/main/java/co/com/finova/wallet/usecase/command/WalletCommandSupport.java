@@ -58,7 +58,8 @@ public final class WalletCommandSupport {
 
     /**
      * Runs the command in one transaction. A ledger conflict or a missing DEBIT rolls everything back,
-     * is logged as an error and is rethrown, so the message is retried and ends in the DLQ.
+     * is logged as an error and is rethrown; the consumer sends such a command straight to the DLQ
+     * (decision S2: retrying it can never succeed).
      */
     public <P extends MessagePayload> void run(MessageEnvelope<P> command, UUID transferId,
                                                Consumer<Context> handler) {
