@@ -1,5 +1,6 @@
 package co.com.finova.identity.jwt;
 
+import co.com.finova.identity.model.token.AccessTokenClaims;
 import co.com.finova.identity.model.token.SignedToken;
 import co.com.finova.identity.model.token.gateways.TokenSigner;
 import com.nimbusds.jose.JOSEException;
@@ -10,12 +11,18 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.proc.BadJOSEException;
+import com.nimbusds.jose.proc.JWSVerificationKeySelector;
+import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +30,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
@@ -33,6 +41,7 @@ import java.util.function.UnaryOperator;
 public class RsaTokenSigner implements TokenSigner {
 
     private final RSAKey key;
+    private final DefaultJWTProcessor<SecurityContext> verifier = new DefaultJWTProcessor<>();
     private final String issuer;
     private final Clock clock;
 
@@ -50,6 +59,11 @@ public class RsaTokenSigner implements TokenSigner {
         } catch (JOSEException e) {
             throw new IllegalStateException("Cannot generate the token signing key", e);
         }
+        verifier.setJWSKeySelector(new JWSVerificationKeySelector<>(JWSAlgorithm.RS256,
+                new ImmutableJWKSet<>(new JWKSet(key.toPublicJWK()))));
+        // Only this instance holds the key, so a valid signature already means our iss; exp is checked below.
+        verifier.setJWTClaimsSetVerifier((claims, context) -> {
+        });
     }
 
     @Override
@@ -64,6 +78,24 @@ public class RsaTokenSigner implements TokenSigner {
         return sign(userId, deviceId, FINANCIAL_SESSION_TTL, claims -> claims
                 .claim("scope", scope)
                 .claim("method", method));
+    }
+
+    @Override
+    public Optional<AccessTokenClaims> verifyAccessToken(String token) {
+        try {
+            JWTClaimsSet claims = verifier.process(token, null);
+            String sid = claims.getStringClaim("sid");
+            if (claims.getExpirationTime() == null
+                    || !claims.getExpirationTime().toInstant().isAfter(clock.instant())
+                    || claims.getClaim("scope") != null || sid == null || claims.getJWTID() == null
+                    || claims.getSubject() == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new AccessTokenClaims(claims.getJWTID(), UUID.fromString(sid),
+                    UUID.fromString(claims.getSubject()), claims.getExpirationTime().toInstant()));
+        } catch (ParseException | BadJOSEException | JOSEException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     @Override

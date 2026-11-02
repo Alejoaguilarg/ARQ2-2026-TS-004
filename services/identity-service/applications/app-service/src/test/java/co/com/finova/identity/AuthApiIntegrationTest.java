@@ -103,6 +103,26 @@ class AuthApiIntegrationTest {
         assertThat(JSON.readTree(afterRevoke.body()).get("code").asText()).isEqualTo("REFRESH_TOKEN_INVALID");
     }
 
+    @Test
+    void logoutEndsTheSessionEverywhere() throws Exception {
+        String device = "ios-" + UUID.randomUUID();
+        JsonNode pair = JSON.readTree(post("/auth/login", login("ana@example.com", "Finova2026!", device)).body());
+        JWTClaimsSet claims = verifyWithJwks(pair.get("accessToken").asText());
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/auth/logout"))
+                        .header("Authorization", "Bearer " + pair.get("accessToken").asText())
+                        .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(204);
+        assertThat(redis.opsForValue().get("revoked:jti:" + claims.getJWTID())).isEqualTo("1");
+        assertThat(redis.getExpire("revoked:jti:" + claims.getJWTID())).isBetween(890L, 900L);
+        assertThat(redis.opsForValue().get("revoked:sid:" + claims.getStringClaim("sid"))).isEqualTo("1");
+        HttpResponse<String> refreshAfter = post("/auth/refresh", refresh(pair.get("refreshToken").asText(), device));
+        assertThat(JSON.readTree(refreshAfter.body()).get("code").asText()).isEqualTo("REFRESH_TOKEN_INVALID");
+    }
+
     private JWTClaimsSet verifyWithJwks(String token) throws Exception {
         HttpResponse<String> jwks = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/.well-known/jwks.json")).build(),

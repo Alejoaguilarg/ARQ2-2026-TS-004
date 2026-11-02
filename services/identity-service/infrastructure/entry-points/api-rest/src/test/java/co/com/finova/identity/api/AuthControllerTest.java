@@ -3,6 +3,7 @@ package co.com.finova.identity.api;
 import co.com.finova.identity.model.session.SecurityStoreUnavailableException;
 import co.com.finova.identity.model.session.TokenPair;
 import co.com.finova.identity.usecase.session.LoginUseCase;
+import co.com.finova.identity.usecase.session.LogoutUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -25,7 +26,8 @@ class AuthControllerTest {
 
     private final LoginUseCase login = mock(LoginUseCase.class);
     private final RefreshSessionUseCase refresh = mock(RefreshSessionUseCase.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(login, refresh)).build();
+    private final LogoutUseCase logout = mock(LogoutUseCase.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(login, refresh, logout)).build();
 
     @Test
     void f11_loginAnswersTheTokenPair() throws Exception {
@@ -123,6 +125,36 @@ class AuthControllerTest {
         call("/auth/login", LOGIN).andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.message").value("Unexpected error."));
+    }
+
+    @Test
+    void logoutWithAValidTokenIs204() throws Exception {
+        when(logout.logout("at-1")).thenReturn(true);
+
+        mvc.perform(post("/auth/logout").header("Authorization", "Bearer at-1")).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void logoutWithAnInvalidTokenIs401() throws Exception {
+        when(logout.logout("forged")).thenReturn(false);
+
+        mvc.perform(post("/auth/logout").header("Authorization", "Bearer forged"))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void logoutWithoutABearerIs401WithoutTouchingTheUseCase() throws Exception {
+        mvc.perform(post("/auth/logout")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/auth/logout").header("Authorization", "Basic dXNlcjpwYXNz")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(logout);
+    }
+
+    @Test
+    void logoutWithRedisDownIs503() throws Exception {
+        when(logout.logout("at-1")).thenThrow(new SecurityStoreUnavailableException(new RuntimeException()));
+
+        mvc.perform(post("/auth/logout").header("Authorization", "Bearer at-1"))
+                .andExpect(status().isServiceUnavailable());
     }
 
     private ResultActions call(String path, String body) throws Exception {

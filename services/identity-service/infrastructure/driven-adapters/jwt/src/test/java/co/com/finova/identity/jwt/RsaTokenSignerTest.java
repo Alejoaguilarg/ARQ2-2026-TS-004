@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -94,6 +95,58 @@ class RsaTokenSignerTest {
         String foreign = new RsaTokenSigner("finova-identity").signAccessToken(USER, "d", SESSION, List.of("USER")).value();
 
         assertThatThrownBy(() -> verifyWithPublishedKeys(foreign)).isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void ownAccessTokenVerifiesForLogout() {
+        SignedToken token = signer.signAccessToken(USER, "d", SESSION, List.of("USER"));
+
+        assertThat(signer.verifyAccessToken(token.value())).hasValueSatisfying(claims -> {
+            assertThat(claims.jti()).isEqualTo(token.jti());
+            assertThat(claims.sessionId()).isEqualTo(SESSION);
+            assertThat(claims.userId()).isEqualTo(USER);
+            assertThat(claims.expiresAt()).isEqualTo(token.expiresAt());
+        });
+    }
+
+    @Test
+    void financialSessionIsNotAcceptedForLogout() {
+        assertThat(signer.verifyAccessToken(signer.signFinancialSession(USER, "d", "transfer:create", "PIN").value())).isEmpty();
+    }
+
+    @Test
+    void expiredAccessTokenIsNotAccepted() {
+        AtomicReference<Instant> now = new AtomicReference<>(NOW);
+        RsaTokenSigner moving = new RsaTokenSigner("finova-identity", new Clock() {
+            @Override
+            public Instant instant() {
+                return now.get();
+            }
+
+            @Override
+            public java.time.ZoneId getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            @Override
+            public Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+        });
+        String token = moving.signAccessToken(USER, "d", SESSION, List.of("USER")).value();
+
+        now.set(Instant.parse("2026-11-02T12:14:59Z"));
+        assertThat(moving.verifyAccessToken(token)).isPresent();
+        now.set(Instant.parse("2026-11-02T12:15:00Z"));
+        assertThat(moving.verifyAccessToken(token)).isEmpty();
+    }
+
+    @Test
+    void foreignOrMalformedTokensAreNotAccepted() {
+        RsaTokenSigner other = new RsaTokenSigner("finova-identity", Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThat(signer.verifyAccessToken(other.signAccessToken(USER, "d", SESSION, List.of("USER")).value())).isEmpty();
+        assertThat(signer.verifyAccessToken("not-a-jwt")).isEmpty();
     }
 
     // Same check the Gateway's JwksTokenVerifier runs: RS256 only, key from the published set.
