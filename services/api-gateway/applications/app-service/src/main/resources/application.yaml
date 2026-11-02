@@ -1,0 +1,47 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: api-gateway
+  devtools:
+    add-properties: false
+  data:
+    redis:
+      host: "localhost"
+      port: 6379
+      # Fail fast so the Gateway can answer 503 (fail closed) instead of hanging on a dead Redis.
+      timeout: "500ms"
+      connect-timeout: "500ms"
+  cloud:
+    gateway:
+      mvc:
+        routes:
+          # spec.md §3.1.3. Client-sent identity headers are always stripped (§3.1 step 5).
+          - id: identity
+            uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+            predicates:
+              - Path=/auth/**
+            filters: &strip-identity
+              - RemoveRequestHeader=X-User-Id
+              - RemoveRequestHeader=X-Device-Id
+              - RemoveRequestHeader=X-User-Roles
+          - id: wallet
+            uri: ${WALLET_SERVICE_URI:http://localhost:8082}
+            predicates:
+              - Path=/wallets/**
+            filters: *strip-identity
+          - id: transfer
+            uri: ${TRANSFER_SERVICE_URI:http://localhost:8083}
+            predicates:
+              - Path=/transfers/**
+            filters: *strip-identity
+          - id: audit
+            uri: ${AUDIT_SERVICE_URI:http://localhost:8084}
+            predicates:
+              - Path=/audit/**
+            filters: *strip-identity
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,prometheus"
