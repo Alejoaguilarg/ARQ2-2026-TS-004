@@ -3,8 +3,6 @@ apply plugin: 'info.solidsoft.pitest.aggregator'
 allprojects {
     repositories {
         mavenCentral()
-        maven { url "https://repo.spring.io/snapshot" }
-        maven { url "https://repo.spring.io/milestone" }
     }
 }
 
@@ -12,7 +10,6 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'jacoco'
     apply plugin: 'io.spring.dependency-management'
-    apply plugin: 'info.solidsoft.pitest'
 
     compileJava.dependsOn validateStructure
 
@@ -39,8 +36,24 @@ subprojects {
 
     test.finalizedBy(project.tasks.jacocoTestReport)
 
+    jacocoTestReport {
+        dependsOn test
+        reports {
+            xml.setRequired true
+            xml.setOutputLocation layout.buildDirectory.file("reports/jacoco.xml")
+            csv.setRequired false
+            html.setOutputLocation layout.buildDirectory.dir("reports/jacocoHtml")
+        }
+    }
+
+}
+
+// Mutation testing runs only on the domain, and only when requested: ./gradlew pitest
+configure(subprojects.findAll { it.name in ['model', 'usecase'] }) {
+    apply plugin: 'info.solidsoft.pitest'
+
     pitest {
-        targetClasses = ['co.com.finova.wallet.*']
+        targetClasses = ["co.com.finova.wallet.${project.name}.*"]
         excludedClasses = []
         excludedTestClasses = []
         pitestVersion = '1.17.1'
@@ -56,17 +69,6 @@ subprojects {
         failWhenNoMutations = false
         jvmArgs = ["-XX:+AllowRedefinitionToAddDeleteMethods"]
     }
-
-    jacocoTestReport {
-        dependsOn test, 'pitest'
-        reports {
-            xml.setRequired true
-            xml.setOutputLocation layout.buildDirectory.file("reports/jacoco.xml")
-            csv.setRequired false
-            html.setOutputLocation layout.buildDirectory.dir("reports/jacocoHtml")
-        }
-    }
-
 }
 
 jacoco {
@@ -75,7 +77,7 @@ jacoco {
 }
 
 tasks.register('jacocoMergedReport', JacocoReport) {
-    dependsOn = [test, subprojects.jacocoTestReport, pitestReportAggregate]
+    dependsOn = [test, subprojects.jacocoTestReport]
     additionalSourceDirs.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
     sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
     classDirectories.setFrom files(subprojects.sourceSets.main.output)

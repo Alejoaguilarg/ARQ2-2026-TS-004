@@ -5,28 +5,15 @@ spring:
     name: "wallet-service"
   devtools:
     add-properties: false
-  h2:
-    console:
-      enabled: true
-      path: "/h2"
-  profiles:
-    include: null
-  datasource:
-    url: "jdbc:h2:mem:test"
-    username: "sa"
-    password: "pass"
-    driverClassName: "org.h2.Driver"
-  jpa:
-    databasePlatform: "org.hibernate.dialect.H2Dialect"
+  # Datasource and RabbitMQ connection (host, port, vhost, credentials, TLS) come only from
+  # environment variables: SPRING_DATASOURCE_*, SPRING_RABBITMQ_*.
   data:
     redis:
       host: "localhost"
       port: 6379
   rabbitmq:
-    host: "localhost"
-    port: 5672
-    username: "guest"
-    password: "guest"
+    # No RabbitAdmin: the service never declares queues, exchanges or bindings.
+    dynamic: false
     publisher-confirm-type: "correlated"
     publisher-returns: true
     template:
@@ -40,8 +27,6 @@ management:
     health:
       probes:
         enabled: true
-cors:
-  allowed-origins: "http://localhost:4200,http://localhost:8080"
 adapters:
   rabbitmq:
     confirm-timeout: "5s"

@@ -3,7 +3,6 @@ apply plugin: 'org.springframework.boot'
 dependencies {
 	implementation project(':rabbitmq-publisher')
 	implementation project(':redis')
-	implementation 'org.reactivecommons.utils:object-mapper:0.1.0'
 	implementation project(':jpa-repository')
 	testImplementation 'org.springframework:spring-web'
 	implementation project(':api-rest')
