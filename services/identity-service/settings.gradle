@@ -18,3 +18,7 @@ include ':redis'
 project(':redis').projectDir = file('./infrastructure/driven-adapters/redis')
 include ':jpa-repository'
 project(':jpa-repository').projectDir = file('./infrastructure/driven-adapters/jpa-repository')
+include ':jwt'
+project(':jwt').projectDir = file('./infrastructure/driven-adapters/jwt')
+include ':api-rest'
+project(':api-rest').projectDir = file('./infrastructure/entry-points/api-rest')

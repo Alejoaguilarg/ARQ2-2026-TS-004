@@ -21,6 +21,10 @@ spring:
     hibernate:
       # Flyway owns the schema (ADR 006); Hibernate only checks the entities match it.
       ddl-auto: validate
+finova:
+  security:
+    # iss of every token Identity signs; the Gateway checks the same value (JWT_ISSUER there).
+    issuer: ${JWT_ISSUER:finova-identity}
 management:
   endpoints:
     web:
