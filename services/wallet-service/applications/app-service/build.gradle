@@ -5,6 +5,7 @@ dependencies {
 	implementation project(':redis')
 	implementation project(':jpa-repository')
 	testImplementation 'org.springframework:spring-web'
+	testImplementation 'org.springframework:spring-jdbc'
 	implementation project(':api-rest')
     implementation project(':model')
     implementation project(':usecase')
