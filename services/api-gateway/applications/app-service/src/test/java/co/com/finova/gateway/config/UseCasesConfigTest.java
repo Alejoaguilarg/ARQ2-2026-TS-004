@@ -2,9 +2,11 @@ package co.com.finova.gateway.config;
 
 import co.com.finova.gateway.model.idempotency.gateways.IdempotencyStore;
 import co.com.finova.gateway.model.security.gateways.CounterStore;
+import co.com.finova.gateway.model.security.gateways.SessionStore;
 import co.com.finova.gateway.usecase.idempotency.IdempotencyUseCase;
 import co.com.finova.gateway.usecase.security.LockoutUseCase;
 import co.com.finova.gateway.usecase.security.RateLimitUseCase;
+import co.com.finova.gateway.usecase.security.SessionUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +24,7 @@ class UseCasesConfigTest {
             assertThat(context.getBean(IdempotencyUseCase.class)).isNotNull();
             assertThat(context.getBean(RateLimitUseCase.class)).isNotNull();
             assertThat(context.getBean(LockoutUseCase.class)).isNotNull();
+            assertThat(context.getBean(SessionUseCase.class)).isNotNull();
         }
     }
 
@@ -37,6 +40,11 @@ class UseCasesConfigTest {
         @Bean
         CounterStore counterStore() {
             return mock(CounterStore.class);
+        }
+
+        @Bean
+        SessionStore sessionStore() {
+            return mock(SessionStore.class);
         }
     }
 }
