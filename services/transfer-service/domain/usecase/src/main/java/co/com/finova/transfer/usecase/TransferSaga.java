@@ -84,7 +84,7 @@ public class TransferSaga {
             UUID.randomUUID().toString(), "wallet.commands", "credit",
             serialize(new CreditWallet(
                 event.getTransferId(), event.getUserId(),
-                event.getAmount(), event.getCurrency(), 1
+                event.getAmount(), "COP", 1
             )),
             now, null
         );
@@ -104,7 +104,10 @@ public class TransferSaga {
             UUID.randomUUID().toString(), "transfer.events", "transfer.rejected",
             serialize(new TransferRejected(
                 event.getTransferId(), null, null,
-                event.getAmount(), null, event.getReason()
+                event.getAmount(), null,
+                event.getReason() == DebitRejected.Reason.INSUFFICIENT_FUNDS
+                        ? TransferRejected.Reason.INSUFFICIENT_FUNDS
+                        : TransferRejected.Reason.SENDER_WALLET_NOT_FOUND
             )),
             now, null
         );
@@ -199,7 +202,7 @@ public class TransferSaga {
             serialize(new TransferReversed(
                 event.getTransferId(), null, null,
                 event.getAmount(), null,
-                event.getAmount() != null ? ReverseDebit.Reason.CREDIT_TIMEOUT : null
+                TransferReversed.Reason.CREDIT_TIMEOUT
             )),
             now, null
         );

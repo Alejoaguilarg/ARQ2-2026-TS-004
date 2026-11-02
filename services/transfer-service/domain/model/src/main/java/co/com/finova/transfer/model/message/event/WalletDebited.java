@@ -7,17 +7,19 @@ public class WalletDebited {
     private String walletId;
     private String userId;
     private String amount;
+    private String currency;
     private int version;
 
     public WalletDebited() {
     }
 
     public WalletDebited(String transferId, String walletId, String userId,
-                         String amount, int version) {
+                         String amount, String currency, int version) {
         this.transferId = transferId;
         this.walletId = walletId;
         this.userId = userId;
         this.amount = amount;
+        this.currency = currency;
         this.version = version;
     }
 
@@ -33,6 +35,9 @@ public class WalletDebited {
     public String getAmount() { return amount; }
     public void setAmount(String amount) { this.amount = amount; }
 
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+
     public int getVersion() { return version; }
     public void setVersion(int version) { this.version = version; }
 
@@ -45,17 +50,18 @@ public class WalletDebited {
             && Objects.equals(transferId, that.transferId)
             && Objects.equals(walletId, that.walletId)
             && Objects.equals(userId, that.userId)
-            && Objects.equals(amount, that.amount);
+            && Objects.equals(amount, that.amount)
+            && Objects.equals(currency, that.currency);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(transferId, walletId, userId, amount, version);
+        return Objects.hash(transferId, walletId, userId, amount, currency, version);
     }
 
     @Override
     public String toString() {
         return "WalletDebited{transferId='" + transferId + "', walletId='" + walletId
-            + "', userId='" + userId + "', amount='" + amount + "', version=" + version + "}";
+            + "', userId='" + userId + "', amount='" + amount + "', currency='" + currency + "', version=" + version + "}";
     }
 }

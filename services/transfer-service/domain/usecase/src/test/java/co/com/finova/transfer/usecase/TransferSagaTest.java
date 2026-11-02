@@ -1,6 +1,7 @@
 package co.com.finova.transfer.usecase;
 
 import co.com.finova.transfer.model.message.command.DebitWallet;
+import co.com.finova.transfer.model.message.command.ReverseDebit;
 import co.com.finova.transfer.model.message.event.AttemptRecorded;
 import co.com.finova.transfer.model.message.event.CreditFailed;
 import co.com.finova.transfer.model.message.event.DebitRejected;
@@ -60,7 +61,7 @@ class TransferSagaTest {
     void onWalletDebited_whenNotProcessed_sendsCredit() {
         when(processedMessageRepository.exists("t-1", "transfer-service")).thenReturn(false);
 
-        WalletDebited event = new WalletDebited("t-1", "w-1", "user-1", "100.00", 1);
+        WalletDebited event = new WalletDebited("t-1", "w-1", "user-1", "100.00", "COP", 1);
         saga.onWalletDebited(event);
 
         verify(processedMessageRepository).save("t-1", "transfer-service");
@@ -71,7 +72,7 @@ class TransferSagaTest {
     void onWalletDebited_whenAlreadyProcessed_doesNothing() {
         when(processedMessageRepository.exists("t-1", "transfer-service")).thenReturn(true);
 
-        WalletDebited event = new WalletDebited("t-1", "w-1", "user-1", "100.00", 1);
+        WalletDebited event = new WalletDebited("t-1", "w-1", "user-1", "100.00", "COP", 1);
         saga.onWalletDebited(event);
 
         verify(processedMessageRepository, never()).save(anyString(), anyString());
@@ -82,7 +83,7 @@ class TransferSagaTest {
     void onWalletDebitRejected_whenNotProcessed_publishesRejected() {
         when(processedMessageRepository.exists("t-1", "transfer-service")).thenReturn(false);
 
-        DebitRejected event = new DebitRejected("t-1", "user-1", DebitRejected.Reason.INSUFFICIENT_FUNDS);
+        DebitRejected event = new DebitRejected("t-1", "user-1", "100.00", DebitRejected.Reason.INSUFFICIENT_FUNDS);
         saga.onWalletDebitRejected(event);
 
         verify(processedMessageRepository).save("t-1", "transfer-service");
@@ -93,7 +94,7 @@ class TransferSagaTest {
     void onCreditFailed_belowMaxAttempts_resendsCredit() {
         when(processedMessageRepository.exists("t-1", "transfer-service")).thenReturn(false);
 
-        CreditFailed event = new CreditFailed("t-1", "user-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND);
+        CreditFailed event = new CreditFailed("t-1", "user-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND, "100.00", "COP");
         saga.onCreditFailed(event);
 
         verify(processedMessageRepository).save("t-1", "transfer-service");
@@ -104,7 +105,7 @@ class TransferSagaTest {
     void onCreditFailed_atMaxAttempts_compensates() {
         when(processedMessageRepository.exists("t-1", "transfer-service")).thenReturn(false);
 
-        CreditFailed event = new CreditFailed("t-1", "user-1", 3, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND);
+        CreditFailed event = new CreditFailed("t-1", "user-1", 3, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND, "100.00", "COP");
         saga.onCreditFailed(event);
 
         verify(processedMessageRepository).save("t-1", "transfer-service");
@@ -137,7 +138,7 @@ class TransferSagaTest {
     void onCreditFailed_whenAlreadyProcessed_doesNothing() {
         when(processedMessageRepository.exists("t-1", "transfer-service")).thenReturn(true);
 
-        CreditFailed event = new CreditFailed("t-1", "user-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND);
+        CreditFailed event = new CreditFailed("t-1", "user-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND, "100.00", "COP");
         saga.onCreditFailed(event);
 
         verify(processedMessageRepository, never()).save(anyString(), anyString());
@@ -147,7 +148,7 @@ class TransferSagaTest {
     @Test
     void compensate_createsReverseDebit() {
         saga.compensate("t-1", "user-1", "100.00", "COP",
-                DebitReversed.Reason.CREDIT_TIMEOUT, java.time.Instant.now());
+                ReverseDebit.Reason.CREDIT_TIMEOUT, java.time.Instant.now());
 
         verify(outboxRepository, atLeastOnce()).save(any(OutboxMessage.class));
     }

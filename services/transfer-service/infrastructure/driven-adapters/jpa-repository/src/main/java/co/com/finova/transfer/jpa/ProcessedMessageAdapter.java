@@ -1,12 +1,11 @@
 package co.com.finova.transfer.jpa;
 
-import co.com.finova.transfer.model.message.gateways.ProcessedMessageRepository as DomainProcessedMessageRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 
 @Repository
-public class ProcessedMessageAdapter implements DomainProcessedMessageRepository {
+public class ProcessedMessageAdapter implements co.com.finova.transfer.model.message.gateways.ProcessedMessageRepository {
 
     private final ProcessedMessageRepository repository;
 

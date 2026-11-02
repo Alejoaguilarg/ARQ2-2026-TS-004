@@ -1,6 +1,5 @@
 package co.com.finova.transfer.jpa;
 
-import co.com.finova.transfer.model.message.gateways.OutboxMessage as DomainOutboxMessage;
 import co.com.finova.transfer.model.message.gateways.OutboxRepository;
 import org.springframework.stereotype.Repository;
 

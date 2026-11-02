@@ -1,7 +1,7 @@
 package co.com.finova.transfer.rabbitmqpublisher;
 
 import co.com.finova.transfer.model.message.MessagePublishException;
-import co.com.finova.transfer.model.message.OutboundMessage;
+import co.com.finova.transfer.model.message.envelope.MessageEnvelope;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.Message;
@@ -13,6 +13,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,8 +26,9 @@ import static org.mockito.Mockito.verify;
 
 class RabbitMQMessagePublisherTest {
 
-    private static final OutboundMessage MESSAGE = new OutboundMessage(
-            "msg-1", "corr-1", "transfer.events", "transfer.completed", "{\"transferId\":\"t-1\"}");
+    private static final MessageEnvelope MESSAGE = new MessageEnvelope(
+            "msg-1", "transfer.completed", "corr-1", "t-1", "transfer-service",
+            "transfer.events", "transfer.completed", Instant.now(), "{\"transferId\":\"t-1\"}");
 
     private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
     private final RabbitMQMessagePublisher publisher =
@@ -44,7 +46,7 @@ class RabbitMQMessagePublisherTest {
         assertThat(properties.getMessageId()).isEqualTo("msg-1");
         assertThat(properties.getCorrelationId()).isEqualTo("corr-1");
         assertThat(properties.getDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
-        assertThat(new String(sent.getValue().getBody(), StandardCharsets.UTF_8)).isEqualTo(MESSAGE.payload());
+        assertThat(new String(sent.getValue().getBody(), StandardCharsets.UTF_8)).isEqualTo(MESSAGE.getPayload().toString());
     }
 
     @Test

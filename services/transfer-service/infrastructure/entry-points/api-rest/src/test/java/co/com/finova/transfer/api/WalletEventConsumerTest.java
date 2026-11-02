@@ -28,9 +28,9 @@ class WalletEventConsumerTest {
     @Test
     void onWalletDebited_callsSaga() {
         Message message = new Message(new byte[0], new MessageProperties());
-        WalletDebited event = new WalletDebited("t-1", "w-1", "user-1", "100.00", 1);
+        WalletDebited event = new WalletDebited("t-1", "w-1", "user-1", "100.00", "COP", 1);
 
-        consumer.onWalletDebited(message, event);
+        consumer.onWalletEvent(message, event);
 
         verify(saga).onWalletDebited(event);
     }
@@ -38,7 +38,7 @@ class WalletEventConsumerTest {
     @Test
     void onWalletDebitRejected_callsSaga() {
         Message message = new Message(new byte[0], new MessageProperties());
-        DebitRejected event = new DebitRejected("t-1", "user-1", DebitRejected.Reason.INSUFFICIENT_FUNDS);
+        DebitRejected event = new DebitRejected("t-1", "user-1", "100.00", DebitRejected.Reason.INSUFFICIENT_FUNDS);
 
         consumer.onWalletDebitRejected(message, event);
 
@@ -58,7 +58,7 @@ class WalletEventConsumerTest {
     @Test
     void onCreditFailed_callsSaga() {
         Message message = new Message(new byte[0], new MessageProperties());
-        CreditFailed event = new CreditFailed("t-1", "user-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND);
+        CreditFailed event = new CreditFailed("t-1", "user-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND, "100.00", "COP");
 
         consumer.onCreditFailed(message, event);
 
@@ -79,10 +79,10 @@ class WalletEventConsumerTest {
     void allHandlers_doNotThrow() {
         Message message = new Message(new byte[0], new MessageProperties());
 
-        assertDoesNotThrow(() -> consumer.onWalletDebited(message, new WalletDebited("t-1", "w-1", "u-1", "100.00", 1)));
-        assertDoesNotThrow(() -> consumer.onWalletDebitRejected(message, new DebitRejected("t-1", "u-1", DebitRejected.Reason.INSUFFICIENT_FUNDS)));
+        assertDoesNotThrow(() -> consumer.onWalletEvent(message, new WalletDebited("t-1", "w-1", "u-1", "100.00", "COP", 1)));
+        assertDoesNotThrow(() -> consumer.onWalletDebitRejected(message, new DebitRejected("t-1", "u-1", "100.00", DebitRejected.Reason.INSUFFICIENT_FUNDS)));
         assertDoesNotThrow(() -> consumer.onWalletCredited(message, new WalletCredited("t-1", "w-1", "u-1", "100.00", 1)));
-        assertDoesNotThrow(() -> consumer.onCreditFailed(message, new CreditFailed("t-1", "u-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND)));
+        assertDoesNotThrow(() -> consumer.onCreditFailed(message, new CreditFailed("t-1", "u-1", 1, CreditFailed.Reason.RECIPIENT_WALLET_NOT_FOUND, "100.00", "COP")));
         assertDoesNotThrow(() -> consumer.onDebitReversed(message, new DebitReversed("t-1", "w-1", "u-1", "100.00", 1)));
     }
 }

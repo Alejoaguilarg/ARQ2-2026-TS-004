@@ -9,6 +9,8 @@ public class MessageEnvelope {
     private String correlationId;
     private String transferId;
     private String producer;
+    private String exchange;
+    private String routingKey;
     private Instant occurredAt;
     private Object payload;
 
@@ -16,12 +18,15 @@ public class MessageEnvelope {
     }
 
     public MessageEnvelope(String messageId, String type, String correlationId,
-                           String transferId, String producer, Instant occurredAt, Object payload) {
+                           String transferId, String producer, String exchange, String routingKey,
+                           Instant occurredAt, Object payload) {
         this.messageId = messageId;
         this.type = type;
         this.correlationId = correlationId;
         this.transferId = transferId;
         this.producer = producer;
+        this.exchange = exchange;
+        this.routingKey = routingKey;
         this.occurredAt = occurredAt;
         this.payload = payload;
     }
@@ -40,6 +45,12 @@ public class MessageEnvelope {
 
     public String getProducer() { return producer; }
     public void setProducer(String producer) { this.producer = producer; }
+
+    public String getExchange() { return exchange; }
+    public void setExchange(String exchange) { this.exchange = exchange; }
+
+    public String getRoutingKey() { return routingKey; }
+    public void setRoutingKey(String routingKey) { this.routingKey = routingKey; }
 
     public Instant getOccurredAt() { return occurredAt; }
     public void setOccurredAt(Instant occurredAt) { this.occurredAt = occurredAt; }

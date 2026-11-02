@@ -12,15 +12,19 @@ public class CreditFailed {
     private String userId;
     private int attempt;
     private Reason reason;
+    private String amount;
+    private String currency;
 
     public CreditFailed() {
     }
 
-    public CreditFailed(String transferId, String userId, int attempt, Reason reason) {
+    public CreditFailed(String transferId, String userId, int attempt, Reason reason, String amount, String currency) {
         this.transferId = transferId;
         this.userId = userId;
         this.attempt = attempt;
         this.reason = reason;
+        this.amount = amount;
+        this.currency = currency;
     }
 
     public String getTransferId() { return transferId; }
@@ -35,6 +39,12 @@ public class CreditFailed {
     public Reason getReason() { return reason; }
     public void setReason(Reason reason) { this.reason = reason; }
 
+    public String getAmount() { return amount; }
+    public void setAmount(String amount) { this.amount = amount; }
+
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -43,17 +53,19 @@ public class CreditFailed {
         return attempt == that.attempt
             && Objects.equals(transferId, that.transferId)
             && Objects.equals(userId, that.userId)
-            && reason == that.reason;
+            && Objects.equals(amount, that.amount)
+            && reason == that.reason
+            && Objects.equals(currency, that.currency);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(transferId, userId, attempt, reason);
+        return Objects.hash(transferId, userId, attempt, reason, amount, currency);
     }
 
     @Override
     public String toString() {
         return "CreditFailed{transferId='" + transferId + "', userId='" + userId
-            + "', attempt=" + attempt + ", reason=" + reason + "}";
+            + "', attempt=" + attempt + ", reason=" + reason + ", amount='" + amount + "', currency='" + currency + "'}";
     }
 }

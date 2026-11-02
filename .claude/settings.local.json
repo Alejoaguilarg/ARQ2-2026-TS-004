@@ -12,7 +12,26 @@
       "Bash(mkdir -p \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/envelope\" \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/command\" \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/event\" \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/gateways\" \"services/transfer-service/domain/usecase/src/main/java/co/com/finova/transfer/usecase\" \"services/transfer-service/infrastructure/driven-adapters/jpa-repository/src/main/java/co/com/finova/transfer/jpa\" \"services/transfer-service/infrastructure/entry-points/api-rest/src/main/java/co/com/finova/transfer/api/config\" \"services/transfer-service/infrastructure/entry-points/api-rest/src/main/java/co/com/finova/transfer/api\" && echo \"Directories created\")",
       "Bash(./gradlew :app-service:test --no-daemon)",
       "Bash(java -version)",
-      "Bash(javac -version)"
+      "Bash(javac -version)",
+      "Bash(rtk read *)",
+      "Bash(rtk grep *)",
+      "Read(//d//**)",
+      "Bash(reg query *)",
+      "Bash(where java *)",
+      "Bash(which winget *)",
+      "Bash(cd /d \"D:\\\\IA\\\\ClaudeAI\\\\ARQUITECTURA2\\\\ARQ2-2026-TS-004-docker-config\\\\services\\\\transfer-service\")",
+      "Bash(./gradlew --version)",
+      "Bash(./gradlew compileJava)",
+      "Bash(rtk curl *)",
+      "Bash(mkdir -p '/c/Program Files/Java')",
+      "Bash(unzip -o /tmp/jdk21.zip -d '/c/Program Files/Java/')",
+      "Bash(mkdir -p ~/jdk21)",
+      "Bash(unzip -o /tmp/jdk21.zip -d ~/jdk21/)",
+      "Bash(export JAVA_HOME='/c/Users/Admin/jdk21/jdk-21.0.5+11')",
+      "Bash('$JAVA_HOME/bin/java' -version)",
+      "Bash(rtk gradlew *)",
+      "Bash(export JAVA_HOME=\"/c/Users/Admin/jdk21/jdk-21.0.5+11\")",
+      "Bash(cat \"$HOME/AppData/Local/rtk/tee/1793651421_gradlew_test.log\" 2>&1 | head -50)"
     ]
   }
 }

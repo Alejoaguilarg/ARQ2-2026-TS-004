@@ -1,5 +1,6 @@
 package co.com.finova.transfer.rabbitmqpublisher;
 
+import co.com.finova.transfer.model.message.MessagePublishException;
 import co.com.finova.transfer.model.message.gateways.MessagePublisher;
 import co.com.finova.transfer.model.message.envelope.MessageEnvelope;
 import org.springframework.amqp.core.Message;
@@ -42,15 +43,15 @@ public class RabbitMQMessagePublisher implements MessagePublisher {
             confirm = correlation.getFuture().get(confirmTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted waiting for confirm of " + envelope.getMessageId(), e);
+            throw new MessagePublishException("Interrupted waiting for confirm of " + envelope.getMessageId(), e);
         } catch (ExecutionException | TimeoutException e) {
-            throw new RuntimeException("No broker confirm for " + envelope.getMessageId(), e);
+            throw new MessagePublishException("No broker confirm for " + envelope.getMessageId(), e);
         }
         if (!confirm.isAck()) {
-            throw new RuntimeException("Broker nacked " + envelope.getMessageId() + ": " + confirm.getReason());
+            throw new MessagePublishException("Broker nacked " + envelope.getMessageId() + ": " + confirm.getReason());
         }
         if (correlation.getReturned() != null) {
-            throw new RuntimeException("Unroutable " + envelope.getMessageId() + " to "
+            throw new MessagePublishException("Unroutable " + envelope.getMessageId() + " to "
                     + envelope.getExchange() + "/" + envelope.getRoutingKey());
         }
     }
