@@ -73,6 +73,8 @@ docker compose --profile apps up -d --build
 | http://localhost:9090 | Prometheus |
 | http://localhost:3000 | Grafana: Prometheus, Loki and Tempo datasources plus the "Finova - Overview" dashboard |
 
+Tests named `*IntegrationTest` start real containers with Testcontainers, so Docker must be running for `./gradlew build`.
+
 ## Team
 
 **Team name:** Grupo #4

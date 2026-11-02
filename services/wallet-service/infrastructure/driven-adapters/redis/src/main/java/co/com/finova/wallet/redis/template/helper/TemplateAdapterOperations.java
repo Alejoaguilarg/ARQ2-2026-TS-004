@@ -5,6 +5,7 @@ import org.reactivecommons.utils.ObjectMapper;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializer;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.function.Function;
@@ -25,6 +26,8 @@ public abstract class TemplateAdapterOperations<E, K, V> {
         template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setDefaultSerializer(new Jackson2JsonRedisSerializer<>(dataClass));
+        // Plain-text keys, so other clients find them by the names in spec.md §2.1.
+        template.setKeySerializer(RedisSerializer.string());
         template.afterPropertiesSet();
     }
 
