@@ -11,6 +11,16 @@ spring:
       port: 6379
       timeout: "500ms"
       connect-timeout: "500ms"
+  # Overridden by SPRING_DATASOURCE_* in docker-compose.yml.
+  datasource:
+    url: "jdbc:postgresql://localhost:5432/identity_db"
+    username: "identity"
+    password: "identity"
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema (ADR 006); Hibernate only checks the entities match it.
+      ddl-auto: validate
 management:
   endpoints:
     web:
