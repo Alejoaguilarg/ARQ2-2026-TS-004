@@ -56,7 +56,7 @@ docker-compose.yml        # (Wave 2) local orchestration
 ```bash
 cp .env.example .env
 
-# Infrastructure only: 5 PostgreSQL DBs, Redis, RabbitMQ (topology from spec.md §4.2), Prometheus, Loki, Tempo, Alloy, Grafana
+# Infrastructure only: 5 PostgreSQL DBs, Redis (primary + replica), RabbitMQ (topology from spec.md §4.2), Prometheus, Loki, Tempo, Alloy, Grafana
 docker compose up -d
 
 # One service plus the infrastructure it depends on
