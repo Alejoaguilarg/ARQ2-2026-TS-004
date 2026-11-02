@@ -9,6 +9,7 @@ Monorepo for Wave 1 (design & specification) and Wave 2 (implementation) of a re
 - **Contract specification:** [docs/spec.md](docs/spec.md)
 - **Architecture Decision Records:** [docs/adrs](docs/adrs)
 - **C4 diagrams:** [docs/assets](docs/assets)
+- **Observability (finding a request in the logs):** [docs/observability.md](docs/observability.md)
 
 ## Problem (short)
 
@@ -91,6 +92,8 @@ docker compose --profile apps up -d --build --no-deps api-gateway       # --no-d
 | auditor@example.com | `5e8a1c3d-7b9f-4d2e-8a6c-1f3b5d7e9a0c` | USER, AUDITOR | 2468 | `3VXYPA2XFSJ24ISKPOYKKEZFJEKVK4SM` |
 
 Wallet seeds must use these same `userId`s. Add a TOTP secret to any authenticator app (6 digits, 30 s) to use `"method": "OTP"` on `POST /auth/financial-session`. The secrets are stored encrypted with the development key in `OTP_ENCRYPTION_KEY`; these are demo credentials only.
+
+**Finding a request in the logs.** Every response carries an `X-Correlation-Id` header, and the Gateway and the services print that id in their log lines. In Grafana, **Explore** → **Loki**: `{service=~".+"} |= "<X-Correlation-Id>"`. See [docs/observability.md](docs/observability.md), which also explains how to add it to a service.
 
 ## Team
 
