@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # Which services changed. Each one is its own Gradle project, so only those are built.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Editing this workflow rebuilds every service, so a CI change is tested against all of them.
+          filters: |
+            api-gateway: [services/api-gateway/**, .github/workflows/ci.yml]
+            identity-service: [services/identity-service/**, .github/workflows/ci.yml]
+            wallet-service: [services/wallet-service/**, .github/workflows/ci.yml]
+            transfer-service: [services/transfer-service/**, .github/workflows/ci.yml]
+            audit-service: [services/audit-service/**, .github/workflows/ci.yml]
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    name: build (${{ matrix.service }})
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      # A filter can match a service that is not on this branch yet (only the workflow changed).
+      - id: exists
+        working-directory: .
+        run: echo "present=$([ -f services/${{ matrix.service }}/gradlew ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: steps.exists.outputs.present == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - if: steps.exists.outputs.present == 'true'
+        uses: gradle/actions/setup-gradle@v4
+      # Unit tests plus *IntegrationTest with Testcontainers (Docker is available on the runner).
+      - if: steps.exists.outputs.present == 'true'
+        run: ./gradlew build --no-daemon
+      - if: failure() && steps.exists.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ matrix.service }}
+          path: services/${{ matrix.service }}/**/build/reports/
+          retention-days: 7
+
+  # The one check to require in branch protection: the build matrix only exists for the services a
+  # PR touches, so requiring "build (x)" would block every PR that does not change x.
+  ci-ok:
+    if: always()
+    needs: [changes, build, infra]
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "All checks passed"
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker-compose is valid
+        run: |
+          docker compose config -q
+          docker compose --profile apps config -q
+      - name: JSON files parse (RabbitMQ topology, Grafana dashboards, Postman collections)
+        run: |
+          status=0
+          for f in $(git ls-files '*.json'); do
+            python3 -m json.tool "$f" > /dev/null || { echo "::error file=$f::invalid JSON"; status=1; }
+          done
+          exit $status
