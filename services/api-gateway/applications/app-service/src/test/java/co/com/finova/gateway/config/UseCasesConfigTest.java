@@ -3,6 +3,7 @@ package co.com.finova.gateway.config;
 import co.com.finova.gateway.model.idempotency.gateways.IdempotencyStore;
 import co.com.finova.gateway.model.security.gateways.CounterStore;
 import co.com.finova.gateway.model.security.gateways.SessionStore;
+import co.com.finova.gateway.model.security.gateways.TokenVerifier;
 import co.com.finova.gateway.usecase.idempotency.IdempotencyUseCase;
 import co.com.finova.gateway.usecase.security.LockoutUseCase;
 import co.com.finova.gateway.usecase.security.RateLimitUseCase;
@@ -45,6 +46,11 @@ class UseCasesConfigTest {
         @Bean
         SessionStore sessionStore() {
             return mock(SessionStore.class);
+        }
+
+        @Bean
+        TokenVerifier tokenVerifier() {
+            return mock(TokenVerifier.class);
         }
     }
 }

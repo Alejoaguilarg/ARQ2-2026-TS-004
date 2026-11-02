@@ -44,7 +44,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Optional<Rule> rule = RULES.stream()
-                .filter(r -> r.method().equals(request.getMethod()) && r.path().matcher(request.getRequestURI()).matches())
+                .filter(r -> r.method().equals(request.getMethod()) && r.path().matcher(RequestPaths.of(request)).matches())
                 .findFirst();
         // The Gateway is the edge, so the socket address is the client; X-Forwarded-For would be client-controlled.
         Object subject = rule.isEmpty() ? null
@@ -60,10 +60,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             retryAfter = rateLimit.check(rule.get().scope(), subject.toString(), rule.get().limitPerMinute());
         } catch (SecurityStoreUnavailableException e) {
             LOG.log(System.Logger.Level.ERROR, "Security store unavailable; failing closed", e);
-            boolean transfer = "POST".equals(request.getMethod()) && "/transfers".equals(request.getRequestURI());
-            GatewayResponses.error(request, response, 503,
-                    transfer ? "IDEMPOTENCY_STORE_UNAVAILABLE" : "SECURITY_STORE_UNAVAILABLE",
-                    "Service temporarily unavailable.");
+            GatewayResponses.storeUnavailable(request, response);
             return;
         }
         if (retryAfter.isPresent()) {

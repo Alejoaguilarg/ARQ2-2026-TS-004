@@ -29,4 +29,11 @@ final class GatewayResponses {
         response.setContentType("application/json");
         JSON.writeValue(response.getOutputStream(), error);
     }
+
+    // spec.md §3.1 "Redis unavailable": fail closed; transfers keep the idempotency code (ADR 003).
+    static void storeUnavailable(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        boolean transfer = "POST".equals(request.getMethod()) && "/transfers".equals(RequestPaths.of(request));
+        error(request, response, 503, transfer ? "IDEMPOTENCY_STORE_UNAVAILABLE" : "SECURITY_STORE_UNAVAILABLE",
+                "Service temporarily unavailable.");
+    }
 }

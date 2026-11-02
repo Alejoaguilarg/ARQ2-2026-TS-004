@@ -42,7 +42,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !("POST".equals(request.getMethod()) && "/transfers".equals(request.getRequestURI()));
+        return !("POST".equals(request.getMethod()) && "/transfers".equals(RequestPaths.of(request)));
     }
 
     @Override
@@ -54,7 +54,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
         String key = request.getHeader("Idempotency-Key");
-        if (key == null || !UUID_PATTERN.matcher(key).matches()) {
+        if (!isValidKey(key)) {
             GatewayResponses.error(request, response, 400, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key header must be a UUID.");
             return;
         }
@@ -87,6 +87,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                 response.getOutputStream().write(replay.body().getBytes(StandardCharsets.UTF_8));
             }
         }
+    }
+
+    static boolean isValidKey(String key) {
+        return key != null && UUID_PATTERN.matcher(key).matches();
     }
 
     private void route(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
