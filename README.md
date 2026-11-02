@@ -75,6 +75,13 @@ docker compose --profile apps up -d --build
 
 Tests named `*IntegrationTest` start real containers with Testcontainers, so Docker must be running for `./gradlew build`.
 
+**Testing with Postman.** Import `docs/postman/finova-auth.postman_collection.json` and run the folders in order; each request stores the tokens the next one needs. Folders 1 to 5 need only the Gateway and Identity:
+
+```bash
+docker compose --profile apps up -d --build identity-service            # also starts identity-db and redis
+docker compose --profile apps up -d --build --no-deps api-gateway       # --no-deps: Transfer and Audit do not exist yet
+```
+
 **Demo users** (seeded by Identity's Flyway migration `V2__demo_users.sql`; registration is out of scope). Password for all: `Finova2026!`
 
 | Email | userId | Roles | PIN | TOTP secret (base32) |
