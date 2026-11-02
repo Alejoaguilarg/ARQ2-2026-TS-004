@@ -25,7 +25,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-// spec.md §3.3 to §3.6. The Gateway counts the 401 INVALID_CREDENTIALS answers for the lockout,
+// spec.md §3.3 to §3.6. Rejections are logged at WARN with the correlationId (CorrelationIdFilter) and
+// never with the email, password, PIN, code or tokens. The Gateway counts the 401 INVALID_CREDENTIALS answers for the lockout,
 // and the 401 STEP_UP_FAILED answers for the step-up lockout, so those codes must stay exactly as they are.
 @RestController
 @RequiredArgsConstructor
@@ -74,10 +75,14 @@ public class AuthController {
         }
         return switch (login.login(body.email(), body.password(), body.deviceId())) {
             case LoginUseCase.Result.Issued issued -> ResponseEntity.ok(TokenPairBody.from(issued.tokens()));
-            case LoginUseCase.Result.InvalidCredentials ignored ->
-                    error(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password.", request);
-            case LoginUseCase.Result.Locked ignored ->
-                    error(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "The account is locked.", request);
+            case LoginUseCase.Result.InvalidCredentials ignored -> {
+                LOG.log(System.Logger.Level.WARNING, "Login rejected: invalid credentials");
+                yield error(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password.", request);
+            }
+            case LoginUseCase.Result.Locked ignored -> {
+                LOG.log(System.Logger.Level.WARNING, "Login rejected: account locked");
+                yield error(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "The account is locked.", request);
+            }
         };
     }
 
@@ -90,8 +95,11 @@ public class AuthController {
             case RefreshSessionUseCase.Result.Issued issued -> ResponseEntity.ok(TokenPairBody.from(issued.tokens()));
             case RefreshSessionUseCase.Result.Invalid ignored -> error(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID",
                     "Refresh token is unknown, expired, revoked or bound to another device.", request);
-            case RefreshSessionUseCase.Result.Reused ignored -> error(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_REUSED",
-                    "Refresh token was already used; the session has been revoked.", request);
+            case RefreshSessionUseCase.Result.Reused ignored -> {
+                LOG.log(System.Logger.Level.WARNING, "Refresh token reused: the session was revoked");
+                yield error(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_REUSED",
+                        "Refresh token was already used; the session has been revoked.", request);
+            }
         };
     }
 
@@ -124,8 +132,10 @@ public class AuthController {
                             TokenSigner.FINANCIAL_SESSION_TTL.toSeconds()));
             case FinancialSessionUseCase.Result.Unauthorized ignored ->
                     error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or expired access token.", request);
-            case FinancialSessionUseCase.Result.StepUpFailed ignored ->
-                    error(HttpStatus.UNAUTHORIZED, "STEP_UP_FAILED", "Wrong PIN or code.", request);
+            case FinancialSessionUseCase.Result.StepUpFailed ignored -> {
+                LOG.log(System.Logger.Level.WARNING, "Step-up failed: wrong " + body.method() + " for user " + userId(request));
+                yield error(HttpStatus.UNAUTHORIZED, "STEP_UP_FAILED", "Wrong PIN or code.", request);
+            }
         };
     }
 
@@ -144,6 +154,12 @@ public class AuthController {
     ResponseEntity<Object> internalError(RuntimeException e, HttpServletRequest request) {
         LOG.log(System.Logger.Level.ERROR, "Unexpected error", e);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error.", request);
+    }
+
+    // Set by the Gateway from the verified token; anything else is not written to the logs.
+    private static String userId(HttpServletRequest request) {
+        String userId = request.getHeader("X-User-Id");
+        return CorrelationIdFilter.isUuid(userId) ? userId : "-";
     }
 
     private static boolean validDevice(String deviceId) {

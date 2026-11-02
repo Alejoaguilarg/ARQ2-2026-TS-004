@@ -34,3 +34,7 @@ management:
     web:
       exposure:
         include: "health,prometheus"
+logging:
+  pattern:
+    # spec.md §1: the correlationId goes in every log line; it is the one the Gateway returned to the client.
+    correlation: "[%X{correlationId:-}] "
