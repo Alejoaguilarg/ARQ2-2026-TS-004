@@ -1,6 +1,12 @@
 server:
   port: 8080
 spring:
+  http:
+    client:
+      # Proxy client to the services. Without a read timeout a hung service holds the request forever;
+      # past it the Gateway answers 504 UPSTREAM_UNAVAILABLE (spec.md §3.1 step 5). Refused: 502.
+      connect-timeout: ${UPSTREAM_CONNECT_TIMEOUT:2s}
+      read-timeout: ${UPSTREAM_READ_TIMEOUT:10s}
   application:
     name: api-gateway
   devtools:
