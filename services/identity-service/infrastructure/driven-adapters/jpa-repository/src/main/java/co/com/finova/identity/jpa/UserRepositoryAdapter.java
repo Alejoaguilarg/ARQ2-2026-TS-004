@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -18,5 +19,10 @@ public class UserRepositoryAdapter implements UserRepository {
     public Optional<User> findByEmail(String email) {
         // Emails are stored lower-cased (CHECK in V1).
         return users.findByEmail(email.trim().toLowerCase(Locale.ROOT)).map(UserEntity::toUser);
+    }
+
+    @Override
+    public Optional<User> findById(UUID userId) {
+        return users.findById(userId).map(UserEntity::toUser);
     }
 }

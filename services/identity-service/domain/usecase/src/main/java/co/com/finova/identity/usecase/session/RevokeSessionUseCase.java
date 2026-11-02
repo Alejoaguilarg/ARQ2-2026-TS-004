@@ -10,9 +10,6 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class RevokeSessionUseCase {
 
-    // Lifetime of an access token: after it, no token of the session can still be valid.
-    private static final Duration SESSION_REVOCATION_TTL = Duration.ofSeconds(900);
-
     private final RevocationStore revocations;
 
     public void execute(String jti, String sid, Instant accessTokenExpiresAt) {
@@ -20,6 +17,6 @@ public class RevokeSessionUseCase {
         if (remaining.isPositive()) {
             revocations.revokeToken(jti, remaining);
         }
-        revocations.revokeSession(sid, SESSION_REVOCATION_TTL);
+        revocations.revokeSession(sid, RevocationStore.SESSION_TTL);
     }
 }

@@ -2,6 +2,7 @@ package co.com.finova.identity.redis;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import co.com.finova.identity.model.session.SecurityStoreUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -13,6 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 class RedisRevocationStoreIntegrationTest {
@@ -48,5 +50,19 @@ class RedisRevocationStoreIntegrationTest {
         assertThat(redis.getExpire("revoked:jti:jti-1")).isBetween(590L, 600L);
         assertThat(redis.opsForValue().get("revoked:sid:sid-1")).isEqualTo("1");
         assertThat(redis.getExpire("revoked:sid:sid-1")).isBetween(890L, 900L);
+    }
+
+    @Test
+    void unreachableRedisFailsWithTheDomainException() {
+        LettuceConnectionFactory dead = new LettuceConnectionFactory(new RedisStandaloneConfiguration("localhost", 1));
+        dead.afterPropertiesSet();
+        try {
+            RedisRevocationStore down = new RedisRevocationStore(new StringRedisTemplate(dead));
+
+            assertThatThrownBy(() -> down.revokeSession("sid-1", Duration.ofSeconds(900)))
+                    .isInstanceOf(SecurityStoreUnavailableException.class);
+        } finally {
+            dead.destroy();
+        }
     }
 }
