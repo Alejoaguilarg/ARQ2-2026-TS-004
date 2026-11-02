@@ -56,7 +56,7 @@ class IdempotencyFilterTest {
     @Test
     void unauthenticatedRequestIs401AndNotRouted() throws Exception {
         MockHttpServletRequest request = post(KEY, BODY);
-        request.removeAttribute(IdempotencyFilter.USER_ID_ATTRIBUTE);
+        request.removeAttribute(AuthenticatedUser.ATTRIBUTE);
 
         assertThat(send(request).getStatus()).isEqualTo(401);
         assertThat(upstreamCalls).isZero();
@@ -181,7 +181,7 @@ class IdempotencyFilterTest {
 
     private static MockHttpServletRequest post(String key, String body) {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/transfers");
-        request.setAttribute(IdempotencyFilter.USER_ID_ATTRIBUTE, USER);
+        request.setAttribute(AuthenticatedUser.ATTRIBUTE, USER);
         if (key != null) {
             request.addHeader("Idempotency-Key", key);
         }

@@ -1,5 +1,6 @@
 package co.com.finova.gateway;
 
+import co.com.finova.gateway.filters.AuthenticatedUser;
 import co.com.finova.gateway.filters.IdempotencyFilter;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.Filter;
@@ -114,7 +115,7 @@ class TransfersIdempotencyIntegrationTest {
             FilterRegistrationBean<Filter> registration = new FilterRegistrationBean<>((request, response, chain) -> {
                 String user = ((jakarta.servlet.http.HttpServletRequest) request).getHeader("X-Test-User");
                 if (user != null) {
-                    request.setAttribute(IdempotencyFilter.USER_ID_ATTRIBUTE, user);
+                    request.setAttribute(AuthenticatedUser.ATTRIBUTE, user);
                 }
                 chain.doFilter(request, response);
             });
