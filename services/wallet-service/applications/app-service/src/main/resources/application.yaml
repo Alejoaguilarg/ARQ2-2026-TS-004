@@ -7,6 +7,11 @@ spring:
     add-properties: false
   # Datasource and RabbitMQ connection (host, port, vhost, credentials, TLS) come only from
   # environment variables: SPRING_DATASOURCE_*, SPRING_RABBITMQ_*.
+  jpa:
+    # Flyway owns the schema (db/migration); Hibernate only checks it.
+    hibernate:
+      ddl-auto: "validate"
+    open-in-view: false
   data:
     redis:
       host: "localhost"
