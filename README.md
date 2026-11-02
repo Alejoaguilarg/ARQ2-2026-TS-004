@@ -75,6 +75,16 @@ docker compose --profile apps up -d --build
 
 Tests named `*IntegrationTest` start real containers with Testcontainers, so Docker must be running for `./gradlew build`.
 
+**Demo users** (seeded by Identity's Flyway migration `V2__demo_users.sql`; registration is out of scope). Password for all: `Finova2026!`
+
+| Email | userId | Roles | PIN |
+|-------|--------|-------|-----|
+| ana@example.com | `7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c` | USER | 4821 |
+| beto@example.com | `2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f` | USER | 1357 |
+| auditor@example.com | `5e8a1c3d-7b9f-4d2e-8a6c-1f3b5d7e9a0c` | USER, AUDITOR | 2468 |
+
+Wallet seeds must use these same `userId`s.
+
 ## Team
 
 **Team name:** Grupo #4

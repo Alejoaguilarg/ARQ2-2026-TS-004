@@ -1,6 +1,7 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
+	implementation project(':jpa-repository')
 	implementation project(':redis')
     implementation project(':model')
     implementation project(':usecase')
