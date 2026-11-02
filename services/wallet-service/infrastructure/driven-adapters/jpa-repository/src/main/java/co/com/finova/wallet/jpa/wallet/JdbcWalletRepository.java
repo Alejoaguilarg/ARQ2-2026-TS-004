@@ -49,9 +49,19 @@ public class JdbcWalletRepository implements WalletRepository {
                 .optional();
     }
 
+    /** Credit and reversal: one UPDATE that adds the amount and increments the version. */
     @Override
     public Wallet increaseBalance(UUID walletId, Money amount) {
-        throw new UnsupportedOperationException("credit and reversal arrive in stage 4");
+        return jdbc.sql("""
+                        UPDATE wallets
+                        SET balance = balance + :amount, version = version + 1, updated_at = now()
+                        WHERE wallet_id = :walletId
+                        RETURNING\s""" + COLUMNS)
+                .param("amount", amount.toBigDecimal())
+                .param("walletId", walletId)
+                .query(JdbcWalletRepository::toWallet)
+                .optional()
+                .orElseThrow(() -> new IllegalStateException("wallet " + walletId + " does not exist"));
     }
 
     private static Wallet toWallet(ResultSet rs, int rowNum) throws SQLException {

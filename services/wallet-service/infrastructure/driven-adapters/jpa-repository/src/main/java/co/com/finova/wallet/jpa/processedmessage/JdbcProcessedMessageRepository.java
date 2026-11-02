@@ -55,6 +55,22 @@ public class JdbcProcessedMessageRepository implements ProcessedMessageRepositor
                 .update();
     }
 
+    @Override
+    public Optional<MessagePayload> findStoredResult(UUID transferId, MessageType resultType) {
+        return jdbc.sql("""
+                        SELECT result_payload::text
+                        FROM processed_messages
+                        WHERE result_type = :resultType AND result_payload ->> 'transferId' = :transferId
+                        ORDER BY processed_at
+                        LIMIT 1
+                        """)
+                .param("resultType", resultType.contractName())
+                .param("transferId", transferId.toString())
+                .query(String.class)
+                .optional()
+                .map(stored -> json.readResult(resultType, stored));
+    }
+
     private ProcessedMessage toProcessedMessage(ResultSet rs, int rowNum) throws SQLException {
         String resultTypeName = rs.getString("result_type");
         MessageType resultType = resultTypeName == null ? null : MessageType.fromContractName(resultTypeName);

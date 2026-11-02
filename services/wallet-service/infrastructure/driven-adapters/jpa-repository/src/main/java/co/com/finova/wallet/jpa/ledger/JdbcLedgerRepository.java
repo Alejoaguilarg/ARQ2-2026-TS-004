@@ -2,13 +2,17 @@ package co.com.finova.wallet.jpa.ledger;
 
 import co.com.finova.wallet.model.ledger.DuplicateLedgerEntryException;
 import co.com.finova.wallet.model.ledger.LedgerEntry;
+import co.com.finova.wallet.model.ledger.LedgerEntryType;
 import co.com.finova.wallet.model.ledger.gateways.LedgerRepository;
+import co.com.finova.wallet.model.money.Money;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
 
 /** Insert-only: a trigger rejects UPDATE, DELETE and TRUNCATE on ledger_entries (V1). */
 @Repository
@@ -44,5 +48,24 @@ public class JdbcLedgerRepository implements LedgerRepository {
             }
             throw e;
         }
+    }
+
+    @Override
+    public Optional<LedgerEntry> findDebit(UUID transferId) {
+        return jdbc.sql("""
+                        SELECT entry_id, wallet_id, transfer_id, type, amount, balance_after, created_at
+                        FROM ledger_entries
+                        WHERE transfer_id = :transferId AND type = 'DEBIT'
+                        """)
+                .param("transferId", transferId)
+                .query((rs, rowNum) -> new LedgerEntry(
+                        rs.getObject("entry_id", UUID.class),
+                        rs.getObject("wallet_id", UUID.class),
+                        rs.getObject("transfer_id", UUID.class),
+                        LedgerEntryType.valueOf(rs.getString("type")),
+                        Money.of(rs.getBigDecimal("amount")),
+                        Money.of(rs.getBigDecimal("balance_after")),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant()))
+                .optional();
     }
 }
