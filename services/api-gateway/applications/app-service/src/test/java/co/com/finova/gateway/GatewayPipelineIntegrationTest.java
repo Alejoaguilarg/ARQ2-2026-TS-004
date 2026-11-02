@@ -14,7 +14,10 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -45,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // Full path with nothing faked inside the Gateway: RS256 tokens checked against a JWKS endpoint,
 // revocation, financial session and idempotency in a real Redis, then the proxy to an upstream stub.
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewayPipelineIntegrationTest {
 
@@ -147,7 +151,20 @@ class GatewayPipelineIntegrationTest {
         assertThat(UPSTREAM_HEADERS).containsEntry("x-user-id", USER)
                 .containsEntry("x-device-id", DEVICE)
                 .containsEntry("x-user-roles", "USER");
-        assertThat(UPSTREAM_HEADERS.get("x-correlation-id")).matches("[0-9a-f-]{36}");
+        assertThat(UPSTREAM_HEADERS.get("x-correlation-id")).matches("[0-9a-f-]{36}")
+                .isEqualTo(response.headers().firstValue("X-Correlation-Id").orElseThrow());
+    }
+
+    @Test
+    void theCorrelationIdOfTheResponseIsInTheErrorBodyAndInTheLogs(CapturedOutput logs) throws Exception {
+        HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/auth/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}")));
+
+        String id = response.headers().firstValue("X-Correlation-Id").orElseThrow();
+        assertThat(response.body()).contains("\"correlationId\":\"" + id + "\"");
+        // UpstreamErrorFilter logs the unreachable Identity; the line carries the id (logging.pattern.correlation).
+        assertThat(logs.getOut()).containsPattern("\\[" + id + "\\].*Upstream unavailable");
     }
 
     @Test

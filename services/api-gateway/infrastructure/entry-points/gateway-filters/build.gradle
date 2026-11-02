@@ -4,6 +4,9 @@ dependencies {
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework:spring-web'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.slf4j:slf4j-api'
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
     testImplementation 'jakarta.servlet:jakarta.servlet-api'
+    // A real MDC in tests: without a logging backend slf4j's MDC stores nothing.
+    testRuntimeOnly 'ch.qos.logback:logback-classic'
 }
