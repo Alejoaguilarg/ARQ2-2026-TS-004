@@ -10,8 +10,11 @@ import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -31,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 // The whole service on real PostgreSQL (Flyway, demo users) and Redis, called over HTTP.
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AuthApiIntegrationTest {
 
@@ -145,6 +149,39 @@ class AuthApiIntegrationTest {
         HttpResponse<String> wrong = stepUp(accessToken, "PIN", "0000");
         assertThat(wrong.statusCode()).isEqualTo(401);
         assertThat(JSON.readTree(wrong.body()).get("code").asText()).isEqualTo("STEP_UP_FAILED");
+    }
+
+    @Test
+    void rejectionsAreLoggedWithTheGatewayCorrelationIdAndWithoutSecrets(CapturedOutput logs) throws Exception {
+        String loginId = UUID.randomUUID().toString();
+        String stepUpId = UUID.randomUUID().toString();
+        String ana = "7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c";
+
+        HttpResponse<String> login = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/auth/login"))
+                        .header("Content-Type", "application/json")
+                        .header("X-Correlation-Id", loginId)
+                        .POST(HttpRequest.BodyPublishers.ofString(login("ana@example.com", "Wr0ng-Secret!", "ios-1")))
+                        .build(), HttpResponse.BodyHandlers.ofString());
+        String accessToken = JSON.readTree(post("/auth/login", login("ana@example.com", "Finova2026!", "ios-1")).body())
+                .get("accessToken").asText();
+        HttpResponse<String> stepUp = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/auth/financial-session"))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Content-Type", "application/json")
+                        .header("X-Correlation-Id", stepUpId)
+                        .header("X-User-Id", ana)
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"method\":\"PIN\",\"credential\":\"9731\",\"scope\":\"transfer:create\"}"))
+                        .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(login.statusCode()).isEqualTo(401);
+        assertThat(JSON.readTree(login.body()).get("correlationId").asText()).isEqualTo(loginId);
+        assertThat(stepUp.statusCode()).isEqualTo(401);
+        assertThat(logs.getOut())
+                .containsPattern("\\[" + loginId + "\\].*Login rejected: invalid credentials")
+                .containsPattern("\\[" + stepUpId + "\\].*Step-up failed: wrong PIN for user " + ana)
+                .doesNotContain("Wr0ng-Secret!", "ana@example.com", "9731", accessToken);
     }
 
     private HttpResponse<String> stepUp(String accessToken, String method, String credential) throws Exception {
