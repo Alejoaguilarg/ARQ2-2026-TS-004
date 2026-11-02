@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Line coverage per service, all modules together except applications/app-service.
+  MIN_COVERAGE: 90
+
 permissions:
   contents: read
   pull-requests: read
@@ -24,13 +28,13 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@v3
         with:
-          # Editing this workflow rebuilds every service, so a CI change is tested against all of them.
+          # Editing the CI rebuilds every service, so a CI change is tested against all of them.
           filters: |
-            api-gateway: [services/api-gateway/**, .github/workflows/ci.yml]
-            identity-service: [services/identity-service/**, .github/workflows/ci.yml]
-            wallet-service: [services/wallet-service/**, .github/workflows/ci.yml]
-            transfer-service: [services/transfer-service/**, .github/workflows/ci.yml]
-            audit-service: [services/audit-service/**, .github/workflows/ci.yml]
+            api-gateway: [services/api-gateway/**, .github/workflows/ci.yml, .github/scripts/**]
+            identity-service: [services/identity-service/**, .github/workflows/ci.yml, .github/scripts/**]
+            wallet-service: [services/wallet-service/**, .github/workflows/ci.yml, .github/scripts/**]
+            transfer-service: [services/transfer-service/**, .github/workflows/ci.yml, .github/scripts/**]
+            audit-service: [services/audit-service/**, .github/workflows/ci.yml, .github/scripts/**]
 
   build:
     needs: changes
@@ -61,6 +65,10 @@ jobs:
       # Unit tests plus *IntegrationTest with Testcontainers (Docker is available on the runner).
       - if: steps.exists.outputs.present == 'true'
         run: ./gradlew build --no-daemon
+      - if: steps.exists.outputs.present == 'true'
+        name: Line coverage >= ${{ env.MIN_COVERAGE }}%
+        working-directory: .
+        run: python3 .github/scripts/coverage.py services/${{ matrix.service }} "$MIN_COVERAGE"
       - if: failure() && steps.exists.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
