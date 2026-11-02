@@ -8,7 +8,7 @@ import co.com.finova.identity.model.user.gateways.CredentialVerifier;
 import co.com.finova.identity.model.user.gateways.UserRepository;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
-import co.com.finova.identity.usecase.session.RevokeSessionUseCase;
+import co.com.finova.identity.usecase.session.LogoutUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -23,7 +23,7 @@ class UseCasesConfigTest {
     @Test
     void registersEveryUseCaseAsABean() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(TestConfig.class)) {
-            assertThat(context.getBean(RevokeSessionUseCase.class)).isNotNull();
+            assertThat(context.getBean(LogoutUseCase.class)).isNotNull();
             assertThat(context.getBean(LoginUseCase.class)).isNotNull();
             assertThat(context.getBean(RefreshSessionUseCase.class)).isNotNull();
         }

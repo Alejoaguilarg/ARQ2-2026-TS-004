@@ -5,6 +5,7 @@ import co.com.finova.identity.model.session.SecurityStoreUnavailableException;
 import co.com.finova.identity.model.session.TokenPair;
 import co.com.finova.identity.model.token.gateways.TokenSigner;
 import co.com.finova.identity.usecase.session.LoginUseCase;
+import co.com.finova.identity.usecase.session.LogoutUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -16,24 +17,27 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-// spec.md §3.3 and §3.4. The Gateway counts the 401 INVALID_CREDENTIALS answers for the lockout,
+// spec.md §3.3 to §3.5. The Gateway counts the 401 INVALID_CREDENTIALS answers for the lockout,
 // so that code must stay exactly as it is.
 @RestController
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final Pattern BEARER = Pattern.compile("^Bearer +(\\S+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MAX_DEVICE_ID = 128;
     private static final System.Logger LOG = System.getLogger(AuthController.class.getName());
 
     private final LoginUseCase login;
     private final RefreshSessionUseCase refresh;
+    private final LogoutUseCase logout;
 
     public record LoginBody(String email, String password, String deviceId) {
     }
@@ -81,6 +85,17 @@ public class AuthController {
             case RefreshSessionUseCase.Result.Reused ignored -> error(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_REUSED",
                     "Refresh token was already used; the session has been revoked.", request);
         };
+    }
+
+    // The Gateway already checked the token; Identity verifies it again because it needs jti, sid and exp.
+    @PostMapping(path = "/auth/logout")
+    public ResponseEntity<Object> logout(@RequestHeader(name = "Authorization", required = false) String authorization,
+                                         HttpServletRequest request) {
+        var bearer = authorization == null ? null : BEARER.matcher(authorization.trim());
+        if (bearer == null || !bearer.matches() || !logout.logout(bearer.group(1))) {
+            return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or expired access token.", request);
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, HttpMediaTypeNotSupportedException.class})
