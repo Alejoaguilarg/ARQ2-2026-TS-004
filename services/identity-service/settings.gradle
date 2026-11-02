@@ -22,3 +22,5 @@ include ':jwt'
 project(':jwt').projectDir = file('./infrastructure/driven-adapters/jwt')
 include ':api-rest'
 project(':api-rest').projectDir = file('./infrastructure/entry-points/api-rest')
+include ':argon2'
+project(':argon2').projectDir = file('./infrastructure/driven-adapters/argon2')
