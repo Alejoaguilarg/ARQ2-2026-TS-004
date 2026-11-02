@@ -123,6 +123,62 @@ class AuthApiIntegrationTest {
         assertThat(JSON.readTree(refreshAfter.body()).get("code").asText()).isEqualTo("REFRESH_TOKEN_INVALID");
     }
 
+    @Test
+    void f16_stepUpWithPinOrOtpIssuesAFinancialSessionForTheDevice() throws Exception {
+        String device = "ios-" + UUID.randomUUID();
+        String accessToken = JSON.readTree(post("/auth/login", login("ana@example.com", "Finova2026!", device)).body())
+                .get("accessToken").asText();
+
+        HttpResponse<String> pin = stepUp(accessToken, "PIN", "4821");
+        assertThat(pin.statusCode()).isEqualTo(201);
+        JsonNode issued = JSON.readTree(pin.body());
+        assertThat(issued.get("expiresIn").asLong()).isEqualTo(300);
+        JWTClaimsSet session = verifyWithJwks(issued.get("financialSessionToken").asText());
+        assertThat(session.getSubject()).isEqualTo("7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c");
+        assertThat(session.getStringClaim("did")).isEqualTo(device);
+        assertThat(session.getStringClaim("scope")).isEqualTo("transfer:create");
+        assertThat(session.getStringClaim("method")).isEqualTo("PIN");
+
+        // ana's demo secret from the README, so this proves seed, key and verifier agree.
+        assertThat(stepUp(accessToken, "OTP", totp("JOJYF2MFLYMVTZVHPQXBEZXZPG3BSRZ2")).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> wrong = stepUp(accessToken, "PIN", "0000");
+        assertThat(wrong.statusCode()).isEqualTo(401);
+        assertThat(JSON.readTree(wrong.body()).get("code").asText()).isEqualTo("STEP_UP_FAILED");
+    }
+
+    private HttpResponse<String> stepUp(String accessToken, String method, String credential) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/auth/financial-session"))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"method\":\"" + method + "\",\"credential\":\""
+                                + credential + "\",\"scope\":\"transfer:create\"}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    // What an authenticator app shows now (RFC 6238, written out here so the test does not reuse the code under test).
+    private static String totp(String base32Secret) throws Exception {
+        String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        java.io.ByteArrayOutputStream secret = new java.io.ByteArrayOutputStream();
+        int buffer = 0;
+        int bits = 0;
+        for (char c : base32Secret.toCharArray()) {
+            buffer = (buffer << 5) | alphabet.indexOf(c);
+            bits += 5;
+            if (bits >= 8) {
+                secret.write(buffer >> (bits - 8));
+                bits -= 8;
+            }
+        }
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA1");
+        mac.init(new javax.crypto.spec.SecretKeySpec(secret.toByteArray(), "HmacSHA1"));
+        byte[] hash = mac.doFinal(java.nio.ByteBuffer.allocate(8).putLong(java.time.Instant.now().getEpochSecond() / 30).array());
+        int offset = hash[hash.length - 1] & 0x0f;
+        int binary = java.nio.ByteBuffer.wrap(hash, offset, 4).getInt() & 0x7fffffff;
+        return String.format("%06d", binary % 1_000_000);
+    }
+
     private JWTClaimsSet verifyWithJwks(String token) throws Exception {
         HttpResponse<String> jwks = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/.well-known/jwks.json")).build(),

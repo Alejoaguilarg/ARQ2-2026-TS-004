@@ -85,14 +85,15 @@ public class RsaTokenSigner implements TokenSigner {
         try {
             JWTClaimsSet claims = verifier.process(token, null);
             String sid = claims.getStringClaim("sid");
+            String deviceId = claims.getStringClaim("did");
             if (claims.getExpirationTime() == null
                     || !claims.getExpirationTime().toInstant().isAfter(clock.instant())
-                    || claims.getClaim("scope") != null || sid == null || claims.getJWTID() == null
+                    || claims.getClaim("scope") != null || sid == null || deviceId == null || claims.getJWTID() == null
                     || claims.getSubject() == null) {
                 return Optional.empty();
             }
             return Optional.of(new AccessTokenClaims(claims.getJWTID(), UUID.fromString(sid),
-                    UUID.fromString(claims.getSubject()), claims.getExpirationTime().toInstant()));
+                    UUID.fromString(claims.getSubject()), deviceId, claims.getExpirationTime().toInstant()));
         } catch (ParseException | BadJOSEException | JOSEException | IllegalArgumentException e) {
             return Optional.empty();
         }

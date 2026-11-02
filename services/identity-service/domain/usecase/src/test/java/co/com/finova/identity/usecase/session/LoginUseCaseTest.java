@@ -116,7 +116,7 @@ class LoginUseCaseTest {
 
     private void user(User.Status status) {
         when(users.findByEmail("ana@example.com"))
-                .thenReturn(Optional.of(new User(ANA, "ana@example.com", status, List.of("USER"), "pw-hash", "pin-hash")));
+                .thenReturn(Optional.of(new User(ANA, "ana@example.com", status, List.of("USER"), "pw-hash", "pin-hash", null)));
     }
 
     private void assertNothingIssued() {

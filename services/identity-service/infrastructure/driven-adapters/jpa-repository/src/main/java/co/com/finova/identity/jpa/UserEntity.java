@@ -40,7 +40,10 @@ public class UserEntity {
     @Column(name = "pin_hash")
     private String pinHash;
 
+    @Column(name = "otp_secret")
+    private String otpSecret;
+
     User toUser() {
-        return new User(userId, email, status, List.of(roles), passwordHash, pinHash);
+        return new User(userId, email, status, List.of(roles), passwordHash, pinHash, otpSecret);
     }
 }

@@ -4,6 +4,7 @@ apply plugin: 'org.springframework.boot'
 ext['testcontainers.version'] = '1.21.4'
 
 dependencies {
+	implementation project(':totp')
 	implementation project(':argon2')
 	testImplementation 'org.springframework:spring-web'
 	implementation project(':api-rest')

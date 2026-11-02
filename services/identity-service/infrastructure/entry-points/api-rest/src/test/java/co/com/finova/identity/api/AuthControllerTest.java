@@ -2,6 +2,8 @@ package co.com.finova.identity.api;
 
 import co.com.finova.identity.model.session.SecurityStoreUnavailableException;
 import co.com.finova.identity.model.session.TokenPair;
+import co.com.finova.identity.model.token.SignedToken;
+import co.com.finova.identity.usecase.session.FinancialSessionUseCase;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.LogoutUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
@@ -10,6 +12,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -27,7 +31,8 @@ class AuthControllerTest {
     private final LoginUseCase login = mock(LoginUseCase.class);
     private final RefreshSessionUseCase refresh = mock(RefreshSessionUseCase.class);
     private final LogoutUseCase logout = mock(LogoutUseCase.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(login, refresh, logout)).build();
+    private final FinancialSessionUseCase financialSessions = mock(FinancialSessionUseCase.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(login, refresh, logout, financialSessions)).build();
 
     @Test
     void f11_loginAnswersTheTokenPair() throws Exception {
@@ -155,6 +160,58 @@ class AuthControllerTest {
 
         mvc.perform(post("/auth/logout").header("Authorization", "Bearer at-1"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void f16_stepUpAnswers201WithTheFinancialSession() throws Exception {
+        when(financialSessions.open("at-1", FinancialSessionUseCase.Method.PIN, "4821", "transfer:create"))
+                .thenReturn(new FinancialSessionUseCase.Result.Issued(new SignedToken("fs-token", "fs-jti", Instant.now())));
+
+        stepUp("Bearer at-1", "{\"method\":\"PIN\",\"credential\":\"4821\",\"scope\":\"transfer:create\"}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.financialSessionToken").value("fs-token"))
+                .andExpect(jsonPath("$.scope").value("transfer:create"))
+                .andExpect(jsonPath("$.expiresIn").value(300));
+    }
+
+    @Test
+    void wrongCredentialAnswersTheCodeTheGatewayCountsForTheStepUpLockout() throws Exception {
+        when(financialSessions.open(any(), any(), any(), any())).thenReturn(new FinancialSessionUseCase.Result.StepUpFailed());
+
+        stepUp("Bearer at-1", "{\"method\":\"OTP\",\"credential\":\"000000\",\"scope\":\"transfer:create\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("STEP_UP_FAILED"));
+    }
+
+    @Test
+    void stepUpWithAnInvalidAccessTokenIs401Unauthorized() throws Exception {
+        when(financialSessions.open(any(), any(), any(), any())).thenReturn(new FinancialSessionUseCase.Result.Unauthorized());
+
+        stepUp("Bearer forged", "{\"method\":\"PIN\",\"credential\":\"4821\",\"scope\":\"transfer:create\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        stepUp(null, "{\"method\":\"PIN\",\"credential\":\"4821\",\"scope\":\"transfer:create\"}")
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void invalidStepUpBodiesAre400WithoutTouchingTheUseCase() throws Exception {
+        for (String body : new String[]{
+                "{\"method\":\"SMS\",\"credential\":\"4821\",\"scope\":\"transfer:create\"}",
+                "{\"method\":\"PIN\",\"credential\":\"\",\"scope\":\"transfer:create\"}",
+                "{\"method\":\"PIN\",\"credential\":\"4821\",\"scope\":\"profile:update\"}",
+                "{\"credential\":\"4821\",\"scope\":\"transfer:create\"}"}) {
+            stepUp("Bearer at-1", body).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+        verifyNoInteractions(financialSessions);
+    }
+
+    private ResultActions stepUp(String authorization, String body) throws Exception {
+        var request = post("/auth/financial-session").contentType(MediaType.APPLICATION_JSON).content(body);
+        if (authorization != null) {
+            request.header("Authorization", authorization);
+        }
+        return mvc.perform(request);
     }
 
     private ResultActions call(String path, String body) throws Exception {

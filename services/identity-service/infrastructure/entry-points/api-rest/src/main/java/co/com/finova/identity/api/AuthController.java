@@ -4,6 +4,7 @@ import co.com.finova.identity.model.session.RefreshToken;
 import co.com.finova.identity.model.session.SecurityStoreUnavailableException;
 import co.com.finova.identity.model.session.TokenPair;
 import co.com.finova.identity.model.token.gateways.TokenSigner;
+import co.com.finova.identity.usecase.session.FinancialSessionUseCase;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.LogoutUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
@@ -24,8 +25,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-// spec.md §3.3 to §3.5. The Gateway counts the 401 INVALID_CREDENTIALS answers for the lockout,
-// so that code must stay exactly as it is.
+// spec.md §3.3 to §3.6. The Gateway counts the 401 INVALID_CREDENTIALS answers for the lockout,
+// and the 401 STEP_UP_FAILED answers for the step-up lockout, so those codes must stay exactly as they are.
 @RestController
 @RequiredArgsConstructor
 public class AuthController {
@@ -38,6 +39,7 @@ public class AuthController {
     private final LoginUseCase login;
     private final RefreshSessionUseCase refresh;
     private final LogoutUseCase logout;
+    private final FinancialSessionUseCase financialSessions;
 
     public record LoginBody(String email, String password, String deviceId) {
     }
@@ -52,6 +54,12 @@ public class AuthController {
             return new TokenPairBody(pair.accessToken(), "Bearer", TokenSigner.ACCESS_TOKEN_TTL.toSeconds(),
                     pair.refreshToken(), RefreshToken.TTL.toSeconds());
         }
+    }
+
+    public record FinancialSessionBody(String method, String credential, String scope) {
+    }
+
+    public record FinancialSessionIssued(String financialSessionToken, String scope, long expiresIn) {
     }
 
     public record ErrorBody(String code, String message, String correlationId, String timestamp,
@@ -96,6 +104,29 @@ public class AuthController {
             return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or expired access token.", request);
         }
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(path = "/auth/financial-session", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> financialSession(@RequestHeader(name = "Authorization", required = false) String authorization,
+                                                   @RequestBody FinancialSessionBody body, HttpServletRequest request) {
+        var bearer = authorization == null ? null : BEARER.matcher(authorization.trim());
+        if (bearer == null || !bearer.matches()) {
+            return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or expired access token.", request);
+        }
+        if (body == null || !("PIN".equals(body.method()) || "OTP".equals(body.method())) || isBlank(body.credential())
+                || !FinancialSessionUseCase.TRANSFER_SCOPE.equals(body.scope())) {
+            return validationError(request, "method (PIN or OTP), credential and scope (transfer:create) are required.");
+        }
+        return switch (financialSessions.open(bearer.group(1), FinancialSessionUseCase.Method.valueOf(body.method()),
+                body.credential(), body.scope())) {
+            case FinancialSessionUseCase.Result.Issued issued -> ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new FinancialSessionIssued(issued.token().value(), body.scope(),
+                            TokenSigner.FINANCIAL_SESSION_TTL.toSeconds()));
+            case FinancialSessionUseCase.Result.Unauthorized ignored ->
+                    error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or expired access token.", request);
+            case FinancialSessionUseCase.Result.StepUpFailed ignored ->
+                    error(HttpStatus.UNAUTHORIZED, "STEP_UP_FAILED", "Wrong PIN or code.", request);
+        };
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, HttpMediaTypeNotSupportedException.class})

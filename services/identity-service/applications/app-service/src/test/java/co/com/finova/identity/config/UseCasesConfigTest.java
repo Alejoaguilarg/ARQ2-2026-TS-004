@@ -6,6 +6,8 @@ import co.com.finova.identity.model.session.gateways.RefreshTokenRepository;
 import co.com.finova.identity.model.token.gateways.TokenSigner;
 import co.com.finova.identity.model.user.gateways.CredentialVerifier;
 import co.com.finova.identity.model.user.gateways.UserRepository;
+import co.com.finova.identity.model.user.gateways.OneTimeCodeVerifier;
+import co.com.finova.identity.usecase.session.FinancialSessionUseCase;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
 import co.com.finova.identity.usecase.session.LogoutUseCase;
@@ -25,6 +27,7 @@ class UseCasesConfigTest {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(TestConfig.class)) {
             assertThat(context.getBean(LogoutUseCase.class)).isNotNull();
             assertThat(context.getBean(LoginUseCase.class)).isNotNull();
+            assertThat(context.getBean(FinancialSessionUseCase.class)).isNotNull();
             assertThat(context.getBean(RefreshSessionUseCase.class)).isNotNull();
         }
     }
@@ -56,6 +59,11 @@ class UseCasesConfigTest {
         @Bean
         RefreshTokenRepository refreshTokenRepository() {
             return mock(RefreshTokenRepository.class);
+        }
+
+        @Bean
+        OneTimeCodeVerifier oneTimeCodeVerifier() {
+            return mock(OneTimeCodeVerifier.class);
         }
 
         @Bean
