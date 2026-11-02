@@ -17,11 +17,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 // spec.md §3.1 step 1 (JWT, revocation, AUDITOR role) and the header handling of step 5.
-// Runs first so every later step, and every error body, sees the correlation id and the user.
+// Runs first after CorrelationIdFilter so every later step and every error body sees the user.
 @Component
 @Order(AuthenticationFilter.ORDER)
 @RequiredArgsConstructor
@@ -39,7 +38,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Map<String, String> headers = new HashMap<>();
         // spec.md §1.5: the Gateway owns the correlation id; a client-sent one is replaced.
-        headers.put("X-Correlation-Id", UUID.randomUUID().toString());
+        headers.put(CorrelationIdFilter.HEADER, CorrelationIdFilter.of(request));
 
         if (isPublic(request)) {
             chain.doFilter(new IdentityHeadersRequest(request, headers), response);
