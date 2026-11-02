@@ -16,6 +16,9 @@
 .DS_Store
 Thumbs.db
 
+# Claude Code configuration (per-user, not repo)
+.claude/
+
 # Logs
 *.log
 

@@ -12,9 +12,6 @@ x-app: &app
   profiles: ["apps"]
   restart: unless-stopped
   networks: [backend]
-User: 
-Password: 
-Hostname: 
 x-app-env: &app-env
   SPRING_PROFILES_ACTIVE: docker
   SPRING_DATA_REDIS_HOST: redis
