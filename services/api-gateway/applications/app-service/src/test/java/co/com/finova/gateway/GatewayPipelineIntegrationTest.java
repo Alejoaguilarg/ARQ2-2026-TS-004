@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -59,6 +60,7 @@ class GatewayPipelineIntegrationTest {
     private static final AtomicInteger TRANSFER_CALLS = new AtomicInteger();
     private static final AtomicReference<String> TRANSFER_BODY = new AtomicReference<>();
     private static final Map<String, String> UPSTREAM_HEADERS = new ConcurrentHashMap<>();
+    private static final AtomicBoolean TRANSFER_SLOW_ONCE = new AtomicBoolean();
     private static final HttpServer UPSTREAM = startUpstream();
 
     @LocalServerPort
@@ -72,6 +74,8 @@ class GatewayPipelineIntegrationTest {
         registry.add("TRANSFER_SERVICE_URI", () -> upstream);
         registry.add("WALLET_SERVICE_URI", () -> upstream);
         registry.add("JWKS_URI", () -> upstream + "/.well-known/jwks.json");
+        registry.add("IDENTITY_SERVICE_URI", () -> "http://localhost:" + closedPort());
+        registry.add("spring.http.client.read-timeout", () -> "1s");
     }
 
     @AfterAll
@@ -83,6 +87,33 @@ class GatewayPipelineIntegrationTest {
     void reset() {
         TRANSFER_CALLS.set(0);
         UPSTREAM_HEADERS.clear();
+        TRANSFER_SLOW_ONCE.set(false);
+    }
+
+    @Test
+    void upstreamDownIs502UpstreamUnavailable() throws Exception {
+        HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/auth/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}")));
+
+        assertThat(response.statusCode()).isEqualTo(502);
+        assertThat(response.body()).contains("\"UPSTREAM_UNAVAILABLE\"");
+    }
+
+    @Test
+    void upstreamTimeoutIs504AndFreesTheIdempotencyKeyForTheRetry() throws Exception {
+        String accessToken = accessToken(UUID.randomUUID().toString());
+        String session = financialSession();
+        String key = UUID.randomUUID().toString();
+        TRANSFER_SLOW_ONCE.set(true);
+
+        HttpResponse<String> timedOut = postTransfer(accessToken, session, key, BODY);
+        HttpResponse<String> retry = postTransfer(accessToken, session, key, BODY);
+
+        assertThat(timedOut.statusCode()).isEqualTo(504);
+        assertThat(timedOut.body()).contains("\"UPSTREAM_UNAVAILABLE\"");
+        assertThat(retry.statusCode()).isEqualTo(202);
+        assertThat(retry.headers().firstValue("Idempotent-Replayed")).isEmpty();
     }
 
     @Test
@@ -256,6 +287,9 @@ class GatewayPipelineIntegrationTest {
                     exchange -> answer(exchange, 200, new JWKSet(KEY.toPublicJWK()).toString()));
             server.createContext("/transfers", exchange -> {
                 TRANSFER_CALLS.incrementAndGet();
+                if (TRANSFER_SLOW_ONCE.getAndSet(false)) {
+                    sleep(2_000);
+                }
                 TRANSFER_BODY.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                 answer(exchange, 202, "{\"transferId\":\"" + UUID.randomUUID() + "\",\"status\":\"PENDING\"}");
             });
@@ -265,6 +299,22 @@ class GatewayPipelineIntegrationTest {
             });
             server.start();
             return server;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static int closedPort() {
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            return socket.getLocalPort();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
