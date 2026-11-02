@@ -9,7 +9,7 @@ spring:
     add-properties: false
 
   datasource:
-    url: "jdbc:postgresql://localhost:5432/audit_db"
+    url: "jdbc:postgresql://localhost:5436/audit_db"
     username: "audit"
     password: "audit"
     driver-class-name: "org.postgresql.Driver"
