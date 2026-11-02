@@ -25,6 +25,10 @@ finova:
   security:
     # iss of every token Identity signs; the Gateway checks the same value (JWT_ISSUER there).
     issuer: ${JWT_ISSUER:finova-identity}
+    # AES-256 key (base64) that encrypts the OTP secrets in identity_db.
+    # shortcut: the default is a development key committed with the demo secrets; set OTP_ENCRYPTION_KEY
+    # and re-encrypt the secrets before any real deployment.
+    otp-key: ${OTP_ENCRYPTION_KEY:/zUl5NaRDlw5Alr4Q5WD75YZ+SO5WWh/zjaqqr0fgzY=}
 management:
   endpoints:
     web:

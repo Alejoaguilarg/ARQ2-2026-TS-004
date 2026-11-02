@@ -105,6 +105,7 @@ class RsaTokenSignerTest {
             assertThat(claims.jti()).isEqualTo(token.jti());
             assertThat(claims.sessionId()).isEqualTo(SESSION);
             assertThat(claims.userId()).isEqualTo(USER);
+            assertThat(claims.deviceId()).isEqualTo("d");
             assertThat(claims.expiresAt()).isEqualTo(token.expiresAt());
         });
     }

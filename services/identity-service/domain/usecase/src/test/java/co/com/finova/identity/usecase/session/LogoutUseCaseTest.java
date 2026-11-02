@@ -80,6 +80,6 @@ class LogoutUseCaseTest {
     }
 
     private void accessToken(Instant expiresAt) {
-        when(tokens.verifyAccessToken("at")).thenReturn(Optional.of(new AccessTokenClaims("jti-1", SESSION, ANA, expiresAt)));
+        when(tokens.verifyAccessToken("at")).thenReturn(Optional.of(new AccessTokenClaims("jti-1", SESSION, ANA, "ios-1", expiresAt)));
     }
 }

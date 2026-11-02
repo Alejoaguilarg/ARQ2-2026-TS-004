@@ -148,6 +148,6 @@ class RefreshSessionUseCaseTest {
     }
 
     private void activeUser(User.Status status) {
-        when(users.findById(ANA)).thenReturn(Optional.of(new User(ANA, "ana@example.com", status, List.of("USER"), "pw", "pin")));
+        when(users.findById(ANA)).thenReturn(Optional.of(new User(ANA, "ana@example.com", status, List.of("USER"), "pw", "pin", null)));
     }
 }
