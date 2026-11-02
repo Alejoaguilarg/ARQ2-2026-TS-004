@@ -7,7 +7,12 @@
       "Bash(git remote *)",
       "Bash(git fetch *)",
       "Bash(git config *)",
-      "Bash(openspec init *)"
+      "Bash(openspec init *)",
+      "Bash(cp \"services/wallet-service/gradlew\" \"services/transfer-service/gradlew\" && cp \"services/wallet-service/gradlew.bat\" \"services/transfer-service/gradlew.bat\" && cp \"services/wallet-service/gradle/wrapper/gradle-wrapper.jar\" \"services/transfer-service/gradle/wrapper/gradle-wrapper.jar\" && cp \"services/wallet-service/gradle/wrapper/gradle-wrapper.properties\" \"services/transfer-service/gradle/wrapper/gradle-wrapper.properties\" && cp \"services/wallet-service/.dockerignore\" \"services/transfer-service/.dockerignore\" && cp \"services/wallet-service/.gitignore\" \"services/transfer-service/.gitignore\" && cp \"services/wallet-service/applications/app-service/src/test/java/co/com/finova/wallet/.gitignore\" \"services/transfer-service/applications/app-service/src/test/java/co/com/finova/transfer/.gitignore\" && echo \"Copied successfully\")",
+      "Bash(mkdir -p \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/envelope\" \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/command\" \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/event\" \"services/transfer-service/domain/model/src/main/java/co/com/finova/transfer/model/message/gateways\" \"services/transfer-service/domain/usecase/src/main/java/co/com/finova/transfer/usecase\" \"services/transfer-service/infrastructure/driven-adapters/jpa-repository/src/main/java/co/com/finova/transfer/jpa\" \"services/transfer-service/infrastructure/entry-points/api-rest/src/main/java/co/com/finova/transfer/api/config\" \"services/transfer-service/infrastructure/entry-points/api-rest/src/main/java/co/com/finova/transfer/api\" && echo \"Directories created\")",
+      "Bash(./gradlew :app-service:test --no-daemon)",
+      "Bash(java -version)",
+      "Bash(javac -version)"
     ]
   }
 }

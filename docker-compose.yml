@@ -114,10 +114,14 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://transfer-db:5432/transfer_db
       SPRING_DATASOURCE_USERNAME: ${TRANSFER_DB_USER:-transfer}
       SPRING_DATASOURCE_PASSWORD: ${TRANSFER_DB_PASSWORD:-transfer}
+      SPRING_RABBITMQ_HOST: jackal.rmq.cloudamqp.com
+      SPRING_RABBITMQ_PORT: 5671
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VIRTUAL_HOST:-/}
     healthcheck: *app-healthcheck
     depends_on:
       transfer-db: { condition: service_healthy }
-      rabbitmq-init: { condition: service_completed_successfully }
 
   audit-service:
     <<: *app
@@ -204,45 +208,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-
-  # ---------------------------------------------------------------- message broker
-  rabbitmq:
-    image: rabbitmq:4.1-management-alpine
-    restart: unless-stopped
-    networks: [backend]
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-finova}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-finova}
-    ports:
-      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
-    volumes:
-      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-
-  # Loads exchanges, quorum queues, retry queues and DLQs from spec.md §4.2 / §4.5.
-  rabbitmq-init:
-    image: curlimages/curl:8.15.0
-    networks: [backend]
-    volumes:
-      - ./infra/rabbitmq/definitions.json:/definitions.json:ro
-    environment:
-      RABBITMQ_USER: ${RABBITMQ_USER:-finova}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-finova}
-    entrypoint: ["sh", "-c"]
-    command:
-      - >-
-        curl -fsS -u "$$RABBITMQ_USER:$$RABBITMQ_PASSWORD"
-        -H "Content-Type: application/json"
-        -X POST --data @/definitions.json
-        http://rabbitmq:15672/api/definitions
-        && echo "RabbitMQ topology loaded"
-    depends_on:
-      rabbitmq: { condition: service_healthy }
 
   # ---------------------------------------------------------------- external system (mock in Wave 2)
   notification-provider-mock:
