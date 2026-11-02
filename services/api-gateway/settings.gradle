@@ -18,3 +18,5 @@ include ':gateway-filters'
 project(':gateway-filters').projectDir = file('./infrastructure/entry-points/gateway-filters')
 include ':redis'
 project(':redis').projectDir = file('./infrastructure/driven-adapters/redis')
+include ':jwt'
+project(':jwt').projectDir = file('./infrastructure/driven-adapters/jwt')

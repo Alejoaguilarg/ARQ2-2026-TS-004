@@ -142,7 +142,9 @@ components:
         Issued by POST /auth/financial-session after a PIN or OTP challenge. Signed JWT,
         lifetime 5 minutes, scope transfer:create, bound to the user and device. Single use:
         it authorizes exactly one transfer intent (one Idempotency-Key); retries of that same
-        intent are allowed (§3.1, step 3).
+        intent are allowed (§3.1, step 3). JWT claims: iss, sub (userId), did (deviceId),
+        jti (sessionId), scope, method, iat, exp. It has no sid and no roles, and an access
+        token has no scope, so neither can be used in place of the other.
       type: object
       required: [sessionId, userId, deviceId, scope, method, issuedAt, expiresAt]
       properties:
@@ -379,7 +381,7 @@ Every request goes through the API Gateway, which applies these steps in order. 
 | 5 | **Route:** strip client identity headers, inject `X-Correlation-Id`, `X-User-Id`, `X-Device-Id`, `X-User-Roles`, and forward. | `502` / `504 UPSTREAM_UNAVAILABLE` |
 | 6 | **Audit:** every `POST /transfers` rejected in steps 1–4, answered as a duplicate, or failed in step 5 (Transfer answered 5xx or did not answer) publishes `AttemptRecorded` (source `GATEWAY`) to `audit.events` (§4.8). | — |
 
-**Redis unavailable.** Steps 1–4 depend on Redis. If Redis is unavailable, the Gateway fails closed: `POST /transfers` answers `503 IDEMPOTENCY_STORE_UNAVAILABLE` (ADR 003) and every other route answers `503 SECURITY_STORE_UNAVAILABLE`, because token revocation, rate limits and lockout cannot be verified. No request is routed without these checks.
+**Redis unavailable.** Steps 1–4 depend on Redis. If Redis is unavailable, the Gateway fails closed: `POST /transfers` answers `503 IDEMPOTENCY_STORE_UNAVAILABLE` (ADR 003) and every other route answers `503 SECURITY_STORE_UNAVAILABLE`, because token revocation, rate limits and lockout cannot be verified. The same answers apply when Identity's JWKS cannot be fetched and no cached key matches the token's `kid`. No request is routed without these checks.
 
 #### 3.1.1 Idempotency pre-check (ADR 003)
 
@@ -470,6 +472,7 @@ Every error response uses `ErrorResponse`:
 | `WALLET_NOT_FOUND` | 404 | Wallet | User has no wallet |
 | `TRANSFER_NOT_FOUND` | 404 | Transfer | Not found or not visible to the caller |
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | Gateway | Same key still in progress |
+| `PAYLOAD_TOO_LARGE` | 413 | Gateway | Body of `POST /auth/login` or `POST /transfers` larger than 16 KB |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | Gateway / Transfer | Same key, different body |
 | `ACCOUNT_LOCKED` | 423 | Gateway | Login lockout active |
 | `STEP_UP_LOCKED` | 423 | Gateway | Step-up lockout active |

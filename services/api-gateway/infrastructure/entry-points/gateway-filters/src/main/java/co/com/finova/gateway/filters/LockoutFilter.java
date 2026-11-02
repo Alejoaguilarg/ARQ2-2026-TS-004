@@ -35,13 +35,13 @@ public class LockoutFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return !("POST".equals(request.getMethod())
-                && ("/auth/login".equals(request.getRequestURI()) || "/auth/financial-session".equals(request.getRequestURI())));
+                && ("/auth/login".equals(RequestPaths.of(request)) || "/auth/financial-session".equals(RequestPaths.of(request))));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        boolean login = "/auth/login".equals(request.getRequestURI());
+        boolean login = "/auth/login".equals(RequestPaths.of(request));
         Kind kind = login ? Kind.LOGIN : Kind.STEP_UP;
         HttpServletRequest forwarded = request;
         String subject;
