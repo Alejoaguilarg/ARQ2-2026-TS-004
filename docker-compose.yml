@@ -24,7 +24,9 @@ x-app-env: &app-env
   SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
   SPRING_JPA_DATABASEPLATFORM: org.hibernate.dialect.PostgreSQLDialect
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
-  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"
+  # Latency histograms for the p95 panels. Passed as JSON because an env var cannot spell the dash in
+  # percentiles-histogram: MANAGEMENT_..._PERCENTILES_HISTOGRAM_... binds to "percentiles" and fails startup.
+  SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
   # Take effect once a service adds micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp.
   MANAGEMENT_OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
