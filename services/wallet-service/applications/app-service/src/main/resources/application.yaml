@@ -18,9 +18,19 @@ spring:
     driverClassName: "org.h2.Driver"
   jpa:
     databasePlatform: "org.hibernate.dialect.H2Dialect"
-  redis:
+  data:
+    redis:
+      host: "localhost"
+      port: 6379
+  rabbitmq:
     host: "localhost"
-    port: 6379
+    port: 5672
+    username: "guest"
+    password: "guest"
+    publisher-confirm-type: "correlated"
+    publisher-returns: true
+    template:
+      mandatory: true
 management:
   endpoints:
     web:
@@ -32,13 +42,6 @@ management:
         enabled: true
 cors:
   allowed-origins: "http://localhost:4200,http://localhost:8080"
-commons:
-  jms:
-    output-concurrency: 10
-    output-queue: "DEV.QUEUE.1"
-    producer-ttl: 0
-    reactive: false
-ibm:
-  mq:
-    channel: "DEV.APP.SVRCONN"
-    user: "app"
+adapters:
+  rabbitmq:
+    confirm-timeout: "5s"

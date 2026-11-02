@@ -45,10 +45,33 @@ Finova's current architecture performs chained synchronous HTTP calls (User-Serv
   spec.md                 # OpenAPI / AsyncAPI contracts (Wave 1)
   /adrs                   # Architecture Decision Records
   /assets                 # C4 diagrams (PNG/JPG)
-/services                 # (Wave 2) microservices source
-/gateway                  # (Wave 2) API Gateway
+/services                 # (Wave 2) microservices source, including services/api-gateway
+/infra                    # RabbitMQ topology, observability config, notification provider mock
 docker-compose.yml        # (Wave 2) local orchestration
+.env.example              # local credentials and ports (copy to .env)
 ```
+
+## Running locally
+
+```bash
+cp .env.example .env
+
+# Infrastructure only: 5 PostgreSQL DBs, Redis, RabbitMQ (topology from spec.md §4.2), Prometheus, Loki, Tempo, Alloy, Grafana
+docker compose up -d
+
+# One service plus the infrastructure it depends on
+docker compose up -d --build wallet-service
+
+# Whole system (needs every service folder under ./services)
+docker compose --profile apps up -d --build
+```
+
+| URL | What |
+|-----|------|
+| http://localhost:8080 | API Gateway (the only service exposed, spec.md §1.4) |
+| http://localhost:15672 | RabbitMQ management |
+| http://localhost:9090 | Prometheus |
+| http://localhost:3000 | Grafana: Prometheus, Loki and Tempo datasources plus the "Finova - Overview" dashboard |
 
 ## Team
 

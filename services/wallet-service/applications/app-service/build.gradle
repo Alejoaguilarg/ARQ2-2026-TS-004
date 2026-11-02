@@ -1,7 +1,7 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
-	implementation project(':mq-sender')
+	implementation project(':rabbitmq-publisher')
 	implementation project(':redis')
 	implementation 'org.reactivecommons.utils:object-mapper:0.1.0'
 	implementation project(':jpa-repository')

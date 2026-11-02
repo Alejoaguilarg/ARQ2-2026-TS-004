@@ -1,0 +1,328 @@
+# Finova P2P Virtual Wallet - local environment derived from docs/assets/finova-C4.png
+#
+#   docker compose up -d                          infrastructure only (DBs, Redis, RabbitMQ, observability)
+#   docker compose up -d --build wallet-service   one service plus the infrastructure it depends on
+#   docker compose --profile apps up -d --build   the whole system (requires every service under ./services)
+#
+# Only the API Gateway is published to the host (spec.md §1.4). Ops UIs bind to 127.0.0.1 only.
+
+name: finova
+
+x-app: &app
+  profiles: ["apps"]
+  restart: unless-stopped
+  networks: [backend]
+
+x-app-env: &app-env
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-finova}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-finova}
+  SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
+  SPRING_JPA_DATABASEPLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
+  # Latency histograms for the p95 panels. Passed as JSON because an env var cannot spell the dash in
+  # percentiles-histogram: MANAGEMENT_..._PERCENTILES_HISTOGRAM_... binds to "percentiles" and fails startup.
+  SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
+  # Take effect once a service adds micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp.
+  MANAGEMENT_OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+  JAVA_OPTS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=70
+
+x-app-healthcheck: &app-healthcheck
+  test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  start_period: 40s
+
+x-postgres: &postgres
+  image: postgres:16-alpine
+  restart: unless-stopped
+  networks: [backend]
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+
+services:
+  # ---------------------------------------------------------------- edge
+  api-gateway:
+    <<: *app
+    build:
+      context: ./services/api-gateway
+      dockerfile: deployment/Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    environment:
+      <<: *app-env
+      IDENTITY_SERVICE_URI: http://identity-service:8080
+      WALLET_SERVICE_URI: http://wallet-service:8080
+      TRANSFER_SERVICE_URI: http://transfer-service:8080
+      AUDIT_SERVICE_URI: http://audit-service:8080
+      JWKS_URI: http://identity-service:8080/.well-known/jwks.json
+    healthcheck: *app-healthcheck
+    depends_on:
+      redis: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+      identity-service: { condition: service_healthy }
+      wallet-service: { condition: service_healthy }
+      transfer-service: { condition: service_healthy }
+      audit-service: { condition: service_healthy }
+
+  # ---------------------------------------------------------------- services
+  identity-service:
+    <<: *app
+    build:
+      context: ./services/identity-service
+      dockerfile: deployment/Dockerfile
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://identity-db:5432/identity_db
+      SPRING_DATASOURCE_USERNAME: ${IDENTITY_DB_USER:-identity}
+      SPRING_DATASOURCE_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity}
+    healthcheck: *app-healthcheck
+    depends_on:
+      identity-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  wallet-service:
+    <<: *app
+    build:
+      context: ./services/wallet-service
+      dockerfile: deployment/Dockerfile
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://wallet-db:5432/wallet_db
+      SPRING_DATASOURCE_USERNAME: ${WALLET_DB_USER:-wallet}
+      SPRING_DATASOURCE_PASSWORD: ${WALLET_DB_PASSWORD:-wallet}
+    healthcheck: *app-healthcheck
+    depends_on:
+      wallet-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+
+  transfer-service:
+    <<: *app
+    build:
+      context: ./services/transfer-service
+      dockerfile: deployment/Dockerfile
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://transfer-db:5432/transfer_db
+      SPRING_DATASOURCE_USERNAME: ${TRANSFER_DB_USER:-transfer}
+      SPRING_DATASOURCE_PASSWORD: ${TRANSFER_DB_PASSWORD:-transfer}
+    healthcheck: *app-healthcheck
+    depends_on:
+      transfer-db: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+
+  audit-service:
+    <<: *app
+    build:
+      context: ./services/audit-service
+      dockerfile: deployment/Dockerfile
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://audit-db:5432/audit_db
+      SPRING_DATASOURCE_USERNAME: ${AUDIT_DB_USER:-audit}
+      SPRING_DATASOURCE_PASSWORD: ${AUDIT_DB_PASSWORD:-audit}
+    healthcheck: *app-healthcheck
+    depends_on:
+      audit-db: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+
+  notification-service:
+    <<: *app
+    build:
+      context: ./services/notification-service
+      dockerfile: deployment/Dockerfile
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://notification-db:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: ${NOTIFICATION_DB_USER:-notification}
+      SPRING_DATASOURCE_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
+      NOTIFICATION_PROVIDER_URI: http://notification-provider-mock:8080
+    healthcheck: *app-healthcheck
+    depends_on:
+      notification-db: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+      notification-provider-mock: { condition: service_started }
+
+  # ---------------------------------------------------------------- databases (one per service, ADR 006)
+  identity-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: ${IDENTITY_DB_USER:-identity}
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity}
+    volumes: [identity-db-data:/var/lib/postgresql/data]
+
+  wallet-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: wallet_db
+      POSTGRES_USER: ${WALLET_DB_USER:-wallet}
+      POSTGRES_PASSWORD: ${WALLET_DB_PASSWORD:-wallet}
+    volumes: [wallet-db-data:/var/lib/postgresql/data]
+
+  transfer-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: transfer_db
+      POSTGRES_USER: ${TRANSFER_DB_USER:-transfer}
+      POSTGRES_PASSWORD: ${TRANSFER_DB_PASSWORD:-transfer}
+    volumes: [transfer-db-data:/var/lib/postgresql/data]
+
+  audit-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: ${AUDIT_DB_USER:-audit}
+      POSTGRES_PASSWORD: ${AUDIT_DB_PASSWORD:-audit}
+    volumes: [audit-db-data:/var/lib/postgresql/data]
+
+  notification-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: ${NOTIFICATION_DB_USER:-notification}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
+    volumes: [notification-db-data:/var/lib/postgresql/data]
+
+  # ---------------------------------------------------------------- cache / fast store
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [backend]
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---------------------------------------------------------------- message broker
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-finova}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-finova}
+    ports:
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  # Loads exchanges, quorum queues, retry queues and DLQs from spec.md §4.2 / §4.5.
+  rabbitmq-init:
+    image: curlimages/curl:8.15.0
+    networks: [backend]
+    volumes:
+      - ./infra/rabbitmq/definitions.json:/definitions.json:ro
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-finova}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-finova}
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        curl -fsS -u "$$RABBITMQ_USER:$$RABBITMQ_PASSWORD"
+        -H "Content-Type: application/json"
+        -X POST --data @/definitions.json
+        http://rabbitmq:15672/api/definitions
+        && echo "RabbitMQ topology loaded"
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+
+  # ---------------------------------------------------------------- external system (mock in Wave 2)
+  notification-provider-mock:
+    image: wiremock/wiremock:3.13.1
+    restart: unless-stopped
+    networks: [backend]
+    volumes:
+      - ./infra/notification-provider-mock/mappings:/home/wiremock/mappings:ro
+
+  # ---------------------------------------------------------------- observability (Prometheus + Loki + Tempo + Grafana)
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    networks: [backend]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  loki:
+    image: grafana/loki:3.5.0
+    restart: unless-stopped
+    networks: [backend]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes: [loki-data:/loki]
+
+  tempo:
+    image: grafana/tempo:2.8.2
+    restart: unless-stopped
+    networks: [backend]
+    # The named volume is created root-owned and the image runs as uid 10001.
+    user: root
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./infra/observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+
+  # Ships container logs to Loki and receives OTLP traces (4317 gRPC, 4318 HTTP) for Tempo.
+  alloy:
+    image: grafana/alloy:v1.10.0
+    restart: unless-stopped
+    networks: [backend]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    volumes:
+      - ./infra/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki, tempo]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [prometheus, loki, tempo]
+
+networks:
+  backend:
+
+volumes:
+  identity-db-data:
+  wallet-db-data:
+  transfer-db-data:
+  audit-db-data:
+  notification-db-data:
+  redis-data:
+  rabbitmq-data:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:

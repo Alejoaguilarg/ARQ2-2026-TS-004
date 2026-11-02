@@ -20,5 +20,5 @@ include ':jpa-repository'
 project(':jpa-repository').projectDir = file('./infrastructure/driven-adapters/jpa-repository')
 include ':redis'
 project(':redis').projectDir = file('./infrastructure/driven-adapters/redis')
-include ':mq-sender'
-project(':mq-sender').projectDir = file('./infrastructure/driven-adapters/mq-sender')
+include ':rabbitmq-publisher'
+project(':rabbitmq-publisher').projectDir = file('./infrastructure/driven-adapters/rabbitmq-publisher')
