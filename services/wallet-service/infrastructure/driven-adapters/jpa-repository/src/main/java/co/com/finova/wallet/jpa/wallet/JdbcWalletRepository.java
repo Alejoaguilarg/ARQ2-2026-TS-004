@@ -9,7 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,13 +39,14 @@ public class JdbcWalletRepository implements WalletRepository {
      * re-checks balance >= :amount against the committed balance; the balance never goes below zero.
      */
     @Override
-    public Optional<Wallet> debitIfSufficient(UUID userId, Money amount) {
+    public Optional<Wallet> debitIfSufficient(UUID userId, Money amount, Instant updatedAt) {
         return jdbc.sql("""
                         UPDATE wallets
-                        SET balance = balance - :amount, version = version + 1, updated_at = now()
+                        SET balance = balance - :amount, version = version + 1, updated_at = :updatedAt
                         WHERE user_id = :userId AND balance >= :amount
                         RETURNING\s""" + COLUMNS)
                 .param("amount", amount.toBigDecimal())
+                .param("updatedAt", OffsetDateTime.ofInstant(updatedAt, ZoneOffset.UTC))
                 .param("userId", userId)
                 .query(JdbcWalletRepository::toWallet)
                 .optional();
@@ -51,13 +54,14 @@ public class JdbcWalletRepository implements WalletRepository {
 
     /** Credit and reversal: one UPDATE that adds the amount and increments the version. */
     @Override
-    public Wallet increaseBalance(UUID walletId, Money amount) {
+    public Wallet increaseBalance(UUID walletId, Money amount, Instant updatedAt) {
         return jdbc.sql("""
                         UPDATE wallets
-                        SET balance = balance + :amount, version = version + 1, updated_at = now()
+                        SET balance = balance + :amount, version = version + 1, updated_at = :updatedAt
                         WHERE wallet_id = :walletId
                         RETURNING\s""" + COLUMNS)
                 .param("amount", amount.toBigDecimal())
+                .param("updatedAt", OffsetDateTime.ofInstant(updatedAt, ZoneOffset.UTC))
                 .param("walletId", walletId)
                 .query(JdbcWalletRepository::toWallet)
                 .optional()

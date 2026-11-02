@@ -3,9 +3,14 @@ package co.com.finova.wallet.model.wallet.gateways;
 import co.com.finova.wallet.model.money.Money;
 import co.com.finova.wallet.model.wallet.Wallet;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * updatedAt is the instant of the operation, the same one used as occurredAt of its BalanceChanged,
+ * so the balance read model has the same asOf whether it comes from the event or from the wallet.
+ */
 public interface WalletRepository {
 
     Optional<Wallet> findByUserId(UUID userId);
@@ -17,8 +22,8 @@ public interface WalletRepository {
      *
      * @return the updated wallet, or empty when no row was updated (missing wallet or insufficient funds)
      */
-    Optional<Wallet> debitIfSufficient(UUID userId, Money amount);
+    Optional<Wallet> debitIfSufficient(UUID userId, Money amount, Instant updatedAt);
 
     /** Adds the amount and increments the version (credit and reversal). Returns the updated wallet. */
-    Wallet increaseBalance(UUID walletId, Money amount);
+    Wallet increaseBalance(UUID walletId, Money amount, Instant updatedAt);
 }

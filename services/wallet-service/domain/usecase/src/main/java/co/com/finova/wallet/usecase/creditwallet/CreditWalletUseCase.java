@@ -67,7 +67,7 @@ public class CreditWalletUseCase {
         Optional<TransferSettlement> winner = settlements.claim(
                 TransferSettlement.credited(credit.transferId(), context.now()));
         if (winner.isEmpty()) {
-            Wallet walletAfter = wallets.increaseBalance(recipient.get().walletId(), credit.amount());
+            Wallet walletAfter = wallets.increaseBalance(recipient.get().walletId(), credit.amount(), context.now());
             ledger.append(LedgerEntry.credit(context.newId(), credit.transferId(), credit.amount(), walletAfter,
                     context.now()));
             context.reply(WalletCredited.from(credit.transferId(), credit.amount(), walletAfter));

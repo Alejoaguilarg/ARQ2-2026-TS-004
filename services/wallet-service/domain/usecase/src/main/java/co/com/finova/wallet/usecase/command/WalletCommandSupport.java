@@ -19,6 +19,7 @@ import co.com.finova.wallet.model.processedmessage.gateways.ProcessedMessageRepo
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -87,7 +88,9 @@ public final class WalletCommandSupport {
 
     private <P extends MessagePayload> void execute(MessageEnvelope<P> command, UUID transferId,
                                                     Consumer<Context> handler) {
-        Context context = new Context(command, transferId, clock.instant());
+        // One clock read per transaction, truncated to the microseconds PostgreSQL stores: wallets.updated_at
+        // and every occurredAt of the transaction (BalanceChanged included) are then exactly the same instant.
+        Context context = new Context(command, transferId, clock.instant().truncatedTo(ChronoUnit.MICROS));
         Optional<ProcessedMessage> processed = processedMessages.find(command.messageId(), CONSUMER);
         if (processed.isPresent()) {
             MessagePayload storedResult = processed.get().resultPayload();

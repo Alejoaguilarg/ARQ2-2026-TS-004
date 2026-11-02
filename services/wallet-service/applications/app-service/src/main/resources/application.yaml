@@ -16,6 +16,11 @@ spring:
     redis:
       host: "localhost"
       port: 6379
+      # F2.6: a Redis that fails or does not answer must not slow the balance read; after these limits
+      # GET /wallets/me/balance answers from wallet_db. Override with SPRING_DATA_REDIS_TIMEOUT and
+      # SPRING_DATA_REDIS_CONNECT_TIMEOUT.
+      timeout: "200ms"
+      connect-timeout: "200ms"
   rabbitmq:
     # No RabbitAdmin: the service never declares queues, exchanges or bindings.
     dynamic: false

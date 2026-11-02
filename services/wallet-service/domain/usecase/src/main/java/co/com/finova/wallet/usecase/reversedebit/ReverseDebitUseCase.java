@@ -66,7 +66,7 @@ public class ReverseDebitUseCase {
         Optional<TransferSettlement> winner = settlements.claim(
                 TransferSettlement.reversed(reversal.transferId(), context.now()));
         if (winner.isEmpty()) {
-            Wallet walletAfter = wallets.increaseBalance(sender.walletId(), reversal.amount());
+            Wallet walletAfter = wallets.increaseBalance(sender.walletId(), reversal.amount(), context.now());
             ledger.append(LedgerEntry.reversal(context.newId(), reversal.transferId(), reversal.amount(), walletAfter,
                     context.now()));
             context.reply(DebitReversed.from(reversal.transferId(), reversal.amount(), walletAfter));

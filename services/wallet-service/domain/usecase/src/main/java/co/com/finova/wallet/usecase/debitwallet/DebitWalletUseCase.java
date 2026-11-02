@@ -53,7 +53,7 @@ public class DebitWalletUseCase {
     }
 
     private void debit(WalletCommandSupport.Context context, DebitWallet debit) {
-        Optional<Wallet> debited = wallets.debitIfSufficient(debit.userId(), debit.amount());
+        Optional<Wallet> debited = wallets.debitIfSufficient(debit.userId(), debit.amount(), context.now());
         if (debited.isPresent()) {
             Wallet walletAfter = debited.get();
             ledger.append(LedgerEntry.debit(context.newId(), debit.transferId(), debit.amount(), walletAfter,
