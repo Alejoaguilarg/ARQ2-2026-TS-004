@@ -108,6 +108,9 @@ docker compose --profile apps up -d --build wallet-db redis rabbitmq rabbitmq-in
 docker compose ps
 ```
 
+Flyway's `V2__demo_wallets.sql` provisions the wallets of the three Identity demo users (spec §1.6); the rebuild
+job caches them in Redis at startup.
+
 `rabbitmq-init` loads `infra/rabbitmq/definitions.json` and exits. The Wallet port is not published to the host;
 check it from inside the container:
 
