@@ -11,6 +11,15 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +45,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -59,6 +69,11 @@ class GatewayPipelineIntegrationTest {
     private static final GenericContainer<?> REDIS =
             new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
+    @Container
+    private static final GenericContainer<?> RABBITMQ =
+            new GenericContainer<>("rabbitmq:4.1-management-alpine").withExposedPorts(5672);
+    private static final String AUDIT_QUEUE = "test.audit.attempts";
+
     private static final String USER = "7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c";
     private static final String DEVICE = "device-1";
     private static final String BODY = "{\"recipientUserId\":\"r-1\",\"amount\":\"150000.00\",\"currency\":\"COP\"}";
@@ -78,11 +93,43 @@ class GatewayPipelineIntegrationTest {
         String upstream = "http://localhost:" + UPSTREAM.getAddress().getPort();
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
+        registry.add("spring.rabbitmq.port", () -> RABBITMQ.getMappedPort(5672));
         registry.add("TRANSFER_SERVICE_URI", () -> upstream);
         registry.add("WALLET_SERVICE_URI", () -> upstream);
         registry.add("JWKS_URI", () -> upstream + "/.well-known/jwks.json");
         registry.add("IDENTITY_SERVICE_URI", () -> "http://localhost:" + closedPort());
         registry.add("spring.http.client.read-timeout", () -> "1s");
+    }
+
+    // The broker's topology (infra/rabbitmq/definitions.json) reduced to what the Gateway publishes to.
+    private static RabbitTemplate auditQueue() {
+        CachingConnectionFactory connections =
+                new CachingConnectionFactory(RABBITMQ.getHost(), RABBITMQ.getMappedPort(5672));
+        RabbitAdmin admin = new RabbitAdmin(connections);
+        TopicExchange exchange = new TopicExchange("audit.events");
+        Queue queue = new Queue(AUDIT_QUEUE);
+        admin.declareExchange(exchange);
+        admin.declareQueue(queue);
+        admin.declareBinding(BindingBuilder.bind(queue).to(exchange).with("audit.attempt"));
+        return new RabbitTemplate(connections);
+    }
+
+    // The AttemptRecorded messages of one Idempotency-Key, by reason; other tests' messages are skipped.
+    private static Map<String, JsonNode> auditedAttempts(String key, int expected) throws IOException {
+        RabbitTemplate rabbit = auditQueue();
+        Map<String, JsonNode> attempts = new HashMap<>();
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (attempts.size() < expected && System.currentTimeMillis() < deadline) {
+            Message message = rabbit.receive(AUDIT_QUEUE, 500);
+            if (message != null) {
+                JsonNode envelope = new ObjectMapper().readTree(message.getBody());
+                if (key.equals(envelope.path("payload").path("idempotencyKey").asText())) {
+                    attempts.put(envelope.path("payload").path("reason").asText(), envelope);
+                }
+            }
+        }
+        return attempts;
     }
 
     @AfterAll
@@ -229,6 +276,32 @@ class GatewayPipelineIntegrationTest {
         assertThat(second.statusCode()).isEqualTo(403);
         assertThat(second.body()).contains("FINANCIAL_SESSION_USED");
         assertThat(TRANSFER_CALLS.get()).isOne();
+    }
+
+    @Test
+    void f51_theGatewayAuditsTheTransfersItAnswersItself() throws Exception {
+        auditQueue();
+        String accessToken = accessToken(UUID.randomUUID().toString());
+        String session = financialSession();
+        String key = UUID.randomUUID().toString();
+
+        HttpResponse<String> first = postTransfer(accessToken, session, key, BODY);
+        postTransfer(accessToken, session, key, BODY);
+        postTransfer(accessToken, session, key, BODY.replace("150000.00", "1.00"));
+        postTransfer(accessToken, null, key, BODY);
+
+        Map<String, JsonNode> attempts = auditedAttempts(key, 3);
+        assertThat(attempts).containsOnlyKeys("DUPLICATE_REPLAYED", "KEY_REUSED", "FINANCIAL_SESSION_REQUIRED");
+        JsonNode replay = attempts.get("DUPLICATE_REPLAYED");
+        assertThat(replay.path("producer").asText()).isEqualTo("api-gateway");
+        assertThat(replay.path("payload").path("source").asText()).isEqualTo("GATEWAY");
+        assertThat(replay.path("payload").path("outcome").asText()).isEqualTo("DUPLICATE");
+        assertThat(replay.path("payload").path("userId").asText()).isEqualTo(USER);
+        assertThat(replay.path("payload").path("transferId").asText())
+                .isEqualTo(new ObjectMapper().readTree(first.body()).path("transferId").asText());
+        assertThat(attempts.get("KEY_REUSED").path("payload").path("httpStatus").asInt()).isEqualTo(422);
+        assertThat(attempts.get("FINANCIAL_SESSION_REQUIRED").path("payload").path("outcome").asText())
+                .isEqualTo("REJECTED");
     }
 
     @Test

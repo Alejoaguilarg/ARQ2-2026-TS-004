@@ -15,6 +15,8 @@ final class GatewayResponses {
     // Every rejection of the Gateway goes through error(): finova_gateway_rejections_total{code,status} tells a
     // revoked token from an expired one, or a rate limit from a lockout, where http_server_requests only has 401/429.
     static final String REJECTIONS = "finova.gateway.rejections";
+    // The code the Gateway answered with, read by TransferAuditFilter (spec §3.1 step 6).
+    static final String CODE_ATTRIBUTE = "finova.gatewayCode";
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -31,6 +33,7 @@ final class GatewayResponses {
         error.put("timestamp", Instant.now().toString());
         error.put("details", Map.of());
         Metrics.counter(REJECTIONS, "code", code, "status", String.valueOf(status)).increment();
+        request.setAttribute(CODE_ATTRIBUTE, code);
         response.setStatus(status);
         response.setContentType("application/json");
         JSON.writeValue(response.getOutputStream(), error);
