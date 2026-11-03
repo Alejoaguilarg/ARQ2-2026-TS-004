@@ -16,4 +16,7 @@ public interface RefreshTokenRepository {
 
     // Every token of the family (session) becomes REVOKED.
     void revokeFamily(UUID familyId);
+
+    // True once any token of the family is REVOKED: a revoked session never comes back.
+    boolean isFamilyRevoked(UUID familyId);
 }

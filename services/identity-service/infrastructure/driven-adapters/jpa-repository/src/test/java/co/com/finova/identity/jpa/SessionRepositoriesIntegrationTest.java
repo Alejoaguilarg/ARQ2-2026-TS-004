@@ -81,6 +81,24 @@ class SessionRepositoriesIntegrationTest {
     }
 
     @Test
+    void aFamilyStaysRevokedEvenForATokenSavedAfterTheRevocation() {
+        RefreshTokenRepositoryAdapter tokens = new RefreshTokenRepositoryAdapter(jpa);
+        UUID family = UUID.randomUUID();
+        UUID otherFamily = UUID.randomUUID();
+        RefreshToken rotated = token("f", family);
+        tokens.save(rotated);
+        tokens.save(token("g", otherFamily));
+        tokens.markRotated(rotated.tokenHash());
+        assertThat(tokens.isFamilyRevoked(family)).isFalse();
+
+        tokens.revokeFamily(family);
+        tokens.save(token("h", family));
+
+        assertThat(tokens.isFamilyRevoked(family)).isTrue();
+        assertThat(tokens.isFamilyRevoked(otherFamily)).isFalse();
+    }
+
+    @Test
     void deviceIsRegisteredOnceAndItsLastSeenMovesForward() {
         DeviceRepositoryAdapter devices = new DeviceRepositoryAdapter(jdbc);
         devices.recordLogin(ANA, "ios-1");

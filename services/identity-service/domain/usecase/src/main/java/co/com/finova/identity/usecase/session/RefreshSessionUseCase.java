@@ -59,21 +59,34 @@ public class RefreshSessionUseCase {
         if (!presented.deviceId().equals(deviceId) || !presented.expiresAt().isAfter(Instant.now())) {
             return new Result.Invalid();
         }
+        // An ACTIVE token in a revoked family was saved by a refresh that raced a logout or a reuse revocation
+        // (rotate, then the family is revoked, then the new token is saved). REVOKED is final for the session, so
+        // the token is refused and the family revoked again, Redis included, instead of reviving the session once
+        // revoked:sid expires.
+        if (refreshTokens.isFamilyRevoked(presented.familyId())) {
+            endSession(presented);
+            return new Result.Invalid();
+        }
         // Two refreshes with the same token: only one rotates it; the other is treated as reuse.
         if (!refreshTokens.markRotated(presented.tokenHash())) {
             return revoke(presented);
         }
         Optional<User> user = users.findById(presented.userId()).filter(u -> u.status() == User.Status.ACTIVE);
         if (user.isEmpty()) {
-            refreshTokens.revokeFamily(presented.familyId());
+            endSession(presented);
             return new Result.Invalid();
         }
         return new Result.Issued(tokens.issue(user.get(), deviceId, presented.familyId()));
     }
 
     private Result revoke(RefreshToken presented) {
+        endSession(presented);
+        return new Result.Reused();
+    }
+
+    // Revoked in identity_db and in Redis, so the Gateway also refuses the session's access tokens at once.
+    private void endSession(RefreshToken presented) {
         refreshTokens.revokeFamily(presented.familyId());
         revocations.revokeSession(presented.familyId().toString(), RevocationStore.SESSION_TTL);
-        return new Result.Reused();
     }
 }
