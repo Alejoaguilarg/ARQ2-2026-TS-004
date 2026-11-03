@@ -1,0 +1,7 @@
+dependencies {
+    implementation project(':model')
+    implementation project(':usecase')
+    implementation 'org.springframework:spring-context'
+    // @ConditionalOnProperty (job on/off), SLF4J logging and the MDC.
+    implementation 'org.springframework.boot:spring-boot-starter'
+}
