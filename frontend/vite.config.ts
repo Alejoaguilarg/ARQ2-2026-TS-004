@@ -21,6 +21,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // e2e/ runs with Playwright against docker-compose (npm run e2e), not here.
+    include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
     coverage: {
