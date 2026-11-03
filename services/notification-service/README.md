@@ -117,7 +117,16 @@ Si cambias `R__seed_recipient_contacts.sql`, Flyway lo vuelve a ejecutar y resta
 
 ## Probar sin Transfer: mensajes de ejemplo
 
-En la consola de RabbitMQ: **Exchanges → `transfer.events` → Publish message**.
+**Con Postman (recomendado):** importa `postman/notification-service.postman_collection.json`. Publica cada mensaje de `samples/` en `transfer.events` usando la API HTTP de RabbitMQ y verifica que quedó enrutado a una cola. Se puede correr todo seguido con el *Collection Runner*.
+
+- Los valores iniciales de las variables apuntan al RabbitMQ local del compose (`http://localhost:15672`, vhost `%2F`, usuario `finova`).
+- Para CloudAMQP, cambia el **Current value** de `rabbitUrl` (`https://<host de CloudAMQP>`), `vhost`, `rabbitUser` y `rabbitPassword`. Postman no exporta el *Current value*, así que la contraseña no termina en el repo.
+- Para repetir las pruebas desde cero:
+  ```
+  docker compose exec notification-db psql -U notification -d notification_db -c "TRUNCATE notification_log;"
+  ```
+
+**A mano:** en la consola de RabbitMQ: **Exchanges → `transfer.events` → Publish message**.
 - **Routing key:** `transfer.completed`, `transfer.rejected` o `transfer.reversed`.
 - **Properties:** `content_type` = `application/json`, `message_id` = el `messageId` del archivo.
 - **Payload:** el contenido del archivo de `samples/`.
