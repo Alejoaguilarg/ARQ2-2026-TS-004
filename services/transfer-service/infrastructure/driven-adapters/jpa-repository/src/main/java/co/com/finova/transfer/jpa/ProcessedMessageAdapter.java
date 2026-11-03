@@ -14,13 +14,13 @@ public class ProcessedMessageAdapter implements co.com.finova.transfer.model.mes
     }
 
     @Override
-    public boolean exists(String messageId, String consumer) {
-        return repository.existsByMessageIdAndConsumer(messageId, consumer);
+    public boolean exists(String transferId, String consumer) {
+        return repository.existsByTransferIdAndConsumer(transferId, consumer);
     }
 
     @Override
-    public void save(String messageId, String consumer) {
-        ProcessedMessage entity = new ProcessedMessage(messageId, consumer, Instant.now(), null, null);
+    public void save(String transferId, String consumer) {
+        ProcessedMessage entity = new ProcessedMessage(transferId, consumer, Instant.now(), null, null);
         repository.save(entity);
     }
 }

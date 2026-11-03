@@ -8,6 +8,7 @@ import co.com.finova.transfer.model.message.event.DebitRejected;
 import co.com.finova.transfer.model.message.event.DebitReversed;
 import co.com.finova.transfer.model.message.event.WalletCredited;
 import co.com.finova.transfer.model.message.event.WalletDebited;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import co.com.finova.transfer.model.message.gateways.MessagePublisher;
 import co.com.finova.transfer.model.message.gateways.OutboxMessage;
 import co.com.finova.transfer.model.message.gateways.OutboxRepository;
@@ -27,6 +28,7 @@ class TransferSagaTest {
     private OutboxRepository outboxRepository;
     private ProcessedMessageRepository processedMessageRepository;
     private MessagePublisher messagePublisher;
+    private ObjectMapper objectMapper;
     private TransferSaga saga;
 
     @BeforeEach
@@ -34,7 +36,8 @@ class TransferSagaTest {
         outboxRepository = mock(OutboxRepository.class);
         processedMessageRepository = mock(ProcessedMessageRepository.class);
         messagePublisher = mock(MessagePublisher.class);
-        saga = new TransferSaga(outboxRepository, processedMessageRepository, messagePublisher);
+        objectMapper = new ObjectMapper();
+        saga = new TransferSaga(outboxRepository, processedMessageRepository, messagePublisher, objectMapper);
     }
 
     @Test

@@ -24,7 +24,12 @@ public class OutboxMessageAdapter implements OutboxRepository {
             message.getRoutingKey(),
             message.getPayload(),
             message.getCreatedAt(),
-            message.getPublishedAt()
+            message.getPublishedAt(),
+            message.getType(),
+            message.getCorrelationId(),
+            message.getTransferId(),
+            message.getProducer(),
+            message.getOccurredAt()
         );
         repository.save(entity);
     }
@@ -34,7 +39,9 @@ public class OutboxMessageAdapter implements OutboxRepository {
         return repository.findByPublishedAtIsNull().stream()
             .map(e -> new co.com.finova.transfer.model.message.gateways.OutboxMessage(
                 e.getId(), e.getExchange(), e.getRoutingKey(),
-                e.getPayload(), e.getCreatedAt(), e.getPublishedAt()
+                e.getPayload(), e.getCreatedAt(), e.getPublishedAt(),
+                e.getType(), e.getCorrelationId(), e.getTransferId(),
+                e.getProducer(), e.getOccurredAt()
             ))
             .collect(Collectors.toList());
     }

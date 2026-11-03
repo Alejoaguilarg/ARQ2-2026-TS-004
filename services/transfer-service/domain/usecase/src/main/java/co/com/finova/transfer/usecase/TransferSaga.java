@@ -12,6 +12,8 @@ import co.com.finova.transfer.model.message.event.TransferRejected;
 import co.com.finova.transfer.model.message.event.TransferReversed;
 import co.com.finova.transfer.model.message.event.WalletCredited;
 import co.com.finova.transfer.model.message.event.WalletDebited;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import co.com.finova.transfer.model.message.gateways.MessagePublisher;
 import co.com.finova.transfer.model.message.gateways.OutboxMessage;
 import co.com.finova.transfer.model.message.gateways.OutboxRepository;
@@ -30,13 +32,16 @@ public class TransferSaga {
     private final OutboxRepository outboxRepository;
     private final ProcessedMessageRepository processedMessageRepository;
     private final MessagePublisher messagePublisher;
+    private final ObjectMapper objectMapper;
 
     public TransferSaga(OutboxRepository outboxRepository,
                         ProcessedMessageRepository processedMessageRepository,
-                        MessagePublisher messagePublisher) {
+                        MessagePublisher messagePublisher,
+                        ObjectMapper objectMapper) {
         this.outboxRepository = outboxRepository;
         this.processedMessageRepository = processedMessageRepository;
         this.messagePublisher = messagePublisher;
+        this.objectMapper = objectMapper;
     }
 
     public void createTransfer(String transferId, String senderUserId, String recipientUserId,
@@ -53,7 +58,8 @@ public class TransferSaga {
         OutboxMessage debitWalletMsg = new OutboxMessage(
             UUID.randomUUID().toString(), "wallet.commands", "debit",
             serialize(new DebitWallet(transferId, senderUserId, amount, currency)),
-            now, null
+            now, null,
+            "DebitWallet", correlationId, transferId, "transfer-service", now
         );
         outboxRepository.save(debitWalletMsg);
 
@@ -66,7 +72,8 @@ public class TransferSaga {
                 AttemptRecorded.Outcome.ACCEPTED,
                 null, transferId, senderUserId, idempotencyKey, amount, 202, correlationId, now
             )),
-            now, null
+            now, null,
+            "AttemptRecorded", correlationId, transferId, "transfer-service", now
         );
         outboxRepository.save(attemptMsg);
     }
@@ -86,7 +93,8 @@ public class TransferSaga {
                 event.getTransferId(), event.getUserId(),
                 event.getAmount(), "COP", 1
             )),
-            now, null
+            now, null,
+            "CreditWallet", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(creditMsg);
     }
@@ -109,7 +117,8 @@ public class TransferSaga {
                         ? TransferRejected.Reason.INSUFFICIENT_FUNDS
                         : TransferRejected.Reason.SENDER_WALLET_NOT_FOUND
             )),
-            now, null
+            now, null,
+            "TransferRejected", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(rejectedMsg);
 
@@ -123,7 +132,8 @@ public class TransferSaga {
                 event.getReason().toString(),
                 event.getTransferId(), null, null, event.getAmount(), null, null, now
             )),
-            now, null
+            now, null,
+            "AttemptRecorded", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(attemptMsg);
     }
@@ -143,7 +153,8 @@ public class TransferSaga {
                 event.getTransferId(), null, null,
                 event.getAmount(), null, now
             )),
-            now, null
+            now, null,
+            "TransferCompleted", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(completedMsg);
 
@@ -156,7 +167,8 @@ public class TransferSaga {
                 AttemptRecorded.Outcome.COMPLETED,
                 null, event.getTransferId(), null, null, event.getAmount(), null, null, now
             )),
-            now, null
+            now, null,
+            "AttemptRecorded", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(attemptMsg);
     }
@@ -183,7 +195,8 @@ public class TransferSaga {
                 event.getTransferId(), event.getUserId(),
                 event.getAmount(), event.getCurrency(), event.getAttempt() + 1
             )),
-            now, null
+            now, null,
+            "CreditWallet", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(creditMsg);
     }
@@ -204,7 +217,8 @@ public class TransferSaga {
                 event.getAmount(), null,
                 TransferReversed.Reason.CREDIT_TIMEOUT
             )),
-            now, null
+            now, null,
+            "TransferReversed", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(reversedMsg);
 
@@ -217,7 +231,8 @@ public class TransferSaga {
                 AttemptRecorded.Outcome.COMPENSATED,
                 null, event.getTransferId(), null, null, event.getAmount(), null, null, now
             )),
-            now, null
+            now, null,
+            "AttemptRecorded", null, event.getTransferId(), "transfer-service", now
         );
         outboxRepository.save(attemptMsg);
     }
@@ -227,7 +242,8 @@ public class TransferSaga {
         OutboxMessage reverseMsg = new OutboxMessage(
             UUID.randomUUID().toString(), "wallet.commands", "reverse",
             serialize(new ReverseDebit(transferId, userId, amount, currency, reason)),
-            now, null
+            now, null,
+            "ReverseDebit", null, transferId, "transfer-service", now
         );
         outboxRepository.save(reverseMsg);
 
@@ -241,7 +257,8 @@ public class TransferSaga {
                 reason != null ? reason.toString() : null,
                 transferId, null, null, amount, null, null, now
             )),
-            now, null
+            now, null,
+            "AttemptRecorded", null, transferId, "transfer-service", now
         );
         outboxRepository.save(attemptMsg);
     }
@@ -257,6 +274,10 @@ public class TransferSaga {
 
     @SuppressWarnings("unchecked")
     private <T> String serialize(T obj) {
-        return obj.toString();
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize " + obj.getClass().getName(), e);
+        }
     }
 }
