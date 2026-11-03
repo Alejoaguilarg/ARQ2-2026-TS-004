@@ -49,11 +49,13 @@ In `applications/app-service/src/main/resources/application.yaml`:
 ```yaml
 logging:
   pattern:
-    correlation: "[%X{correlationId:-}] [%X{traceId:-},%X{spanId:-}] [%X{transferId:-}] "
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] [%X{traceId:-},%X{spanId:-}] "
 ```
 
-The Gateway and Identity leave out `transferId`: they never handle a transfer. Keep `[traceId,spanId]` right after the
-correlationId: Grafana's link from a log line to its trace looks for it there.
+This is the order Wallet, Transfer and Audit use. The Gateway and Identity leave out `transferId`: they never handle a
+transfer. Keep the `[traceId,spanId]` pair as it is: Grafana's link from a log line to its trace finds that pair by its
+shape (derived field in `infra/observability/grafana/provisioning/datasources/datasources.yml`), wherever it sits in
+the line.
 
 ### 3. RabbitMQ messages
 

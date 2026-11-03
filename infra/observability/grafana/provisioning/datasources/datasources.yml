@@ -15,7 +15,8 @@ datasources:
     url: http://loki:3100
     jsonData:
       derivedFields:
-        # logging.pattern.correlation of the services: [correlationId] [traceId,spanId]
+        # logging.pattern.correlation of the services: [correlationId] [transferId] [traceId,spanId]
+        # (no transferId in Gateway and Identity). The regex finds the pair wherever it is.
         - name: traceId
           matcherRegex: '\[([0-9a-f]{32}),[0-9a-f]{16}\]'
           datasourceUid: tempo

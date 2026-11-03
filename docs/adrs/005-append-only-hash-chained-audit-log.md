@@ -8,10 +8,11 @@
    * External immutable storage (WORM object storage, ledger database): strongest immutability, but outside the open-source, Docker Compose scope of the course.
 * Decision:
    * Gateway, Transfer and Wallet publish AttemptRecorded for every attempt and outcome (accepted, rejected, duplicate, failed, applied, completed and compensated) to the audit.events exchange.
-   * The Audit Service stores them in audit_records (PostgreSQL): the service role has only INSERT and SELECT; a trigger rejects UPDATE, DELETE and TRUNCATE.
+   * The Audit Service stores them in audit_records (PostgreSQL). The service logs in with its own role, which has only INSERT and SELECT and is neither the owner nor a superuser; migrations run as the owner. A trigger rejects UPDATE, DELETE and TRUNCATE for every role.
    * Audit consumes audit.events with a single active consumer, so records are inserted in one total order; each record receives a sequence number (seq), which makes prevHash unambiguous.
    * Each row stores prevHash and hash = SHA-256(prevHash || canonicalJson(row)). GET /audit/verify recomputes the chain and returns valid: false with the first broken seq if a record was altered. Duplicate events are ignored through UNIQUE(eventId).
-   * Monthly partitioning for retention, and WAL archiving for backup and point-in-time recovery.
+   * Monthly partitioning for retention.
+   * Planned, not part of the Docker Compose deliverable: WAL archiving for backup and point-in-time recovery, and periodic anchoring of the last hash outside the database (see the risks below).
 * Trade-offs:
    * Positives (What we gain):
       * One complete, queryable trail of every attempt, including those stopped at the Gateway.
