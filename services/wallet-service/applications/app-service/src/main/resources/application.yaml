@@ -5,32 +5,42 @@ spring:
     name: "wallet-service"
   devtools:
     add-properties: false
-  h2:
-    console:
-      enabled: true
-      path: "/h2"
-  profiles:
-    include: null
-  datasource:
-    url: "jdbc:h2:mem:test"
-    username: "sa"
-    password: "pass"
-    driverClassName: "org.h2.Driver"
+  # Datasource and RabbitMQ connection (host, port, vhost, credentials, TLS) come only from
+  # environment variables: SPRING_DATASOURCE_*, SPRING_RABBITMQ_*.
   jpa:
-    databasePlatform: "org.hibernate.dialect.H2Dialect"
+    # Flyway owns the schema (db/migration); Hibernate only checks it.
+    hibernate:
+      ddl-auto: "validate"
+    open-in-view: false
   data:
     redis:
       host: "localhost"
       port: 6379
+      # F2.6: a Redis that fails or does not answer must not slow the balance read; after these limits
+      # GET /wallets/me/balance answers from wallet_db. Override with SPRING_DATA_REDIS_TIMEOUT and
+      # SPRING_DATA_REDIS_CONNECT_TIMEOUT.
+      timeout: "200ms"
+      connect-timeout: "200ms"
   rabbitmq:
-    host: "localhost"
-    port: 5672
-    username: "guest"
-    password: "guest"
+    # No RabbitAdmin: the service never declares queues, exchanges or bindings.
+    dynamic: false
     publisher-confirm-type: "correlated"
     publisher-returns: true
     template:
       mandatory: true
+    listener:
+      simple:
+        # Spec §4.2: manual acks; a rejected delivery is never requeued, so the queue dead-letters it to
+        # its .retry queue (5 s) and it comes back. The listeners only consume existing queues.
+        acknowledge-mode: "manual"
+        default-requeue-rejected: false
+        missing-queues-fatal: true
+        prefetch: 10
+logging:
+  pattern:
+    # Spec §1.4 and the team log format (pending item 6): correlationId and transferId in every log line,
+    # from the MDC (CorrelationIdFilter for HTTP, MessageLogContext for messages). Empty brackets when absent.
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] "
 management:
   endpoints:
     web:
@@ -40,8 +50,23 @@ management:
     health:
       probes:
         enabled: true
-cors:
-  allowed-origins: "http://localhost:4200,http://localhost:8080"
 adapters:
   rabbitmq:
     confirm-timeout: "5s"
+    # Decision S1: retries after the first delivery (3 = 4 deliveries), then the .dlq.
+    # Override with ADAPTERS_RABBITMQ_MAX_RETRIES.
+    max-retries: 3
+  outbox:
+    # Decision S3: one batch every 100 ms (ADR 002 targets a saga under 1 s, ~4 relay hops per transfer).
+    # Override with ADAPTERS_OUTBOX_RELAY_ENABLED, ADAPTERS_OUTBOX_RELAY_INTERVAL and ADAPTERS_OUTBOX_BATCH_SIZE.
+    relay-enabled: true
+    relay-interval: "100ms"
+    batch-size: 100
+  balance-rebuild:
+    # Decision S6 (spec §4.5, ADR 004): recompute the balance cache from wallet_db at startup and then every
+    # interval. Override with ADAPTERS_BALANCE_REBUILD_ENABLED, ADAPTERS_BALANCE_REBUILD_INTERVAL and
+    # ADAPTERS_BALANCE_REBUILD_PAGE_SIZE.
+    enabled: true
+    initial-delay: "0s"
+    interval: "5m"
+    page-size: 500

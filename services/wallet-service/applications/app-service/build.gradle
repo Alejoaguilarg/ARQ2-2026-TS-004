@@ -1,18 +1,29 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
+	implementation project(':balance-rebuild')
+	implementation project(':outbox-relay')
+	implementation project(':rabbitmq-consumer')
+	implementation project(':message-json')
 	implementation project(':rabbitmq-publisher')
 	implementation project(':redis')
-	implementation 'org.reactivecommons.utils:object-mapper:0.1.0'
 	implementation project(':jpa-repository')
 	testImplementation 'org.springframework:spring-web'
+	testImplementation 'org.springframework:spring-jdbc'
+	testImplementation 'org.springframework.data:spring-data-redis'
 	implementation project(':api-rest')
     implementation project(':model')
     implementation project(':usecase')
     implementation 'org.springframework.boot:spring-boot-starter'
-    runtimeOnly('org.springframework.boot:spring-boot-devtools')
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'com.tngtech.archunit:archunit:1.3.0'
     testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    // Local RabbitMQ with infra/rabbitmq/definitions.json; never the shared account.
+    testImplementation 'org.testcontainers:rabbitmq'
+    testImplementation 'org.springframework.boot:spring-boot-starter-amqp'
 }
 
 tasks.register('explodedJar', Copy) {
