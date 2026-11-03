@@ -50,6 +50,12 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    redis:
+      # Decision S7 (pending item 24): Redis stays out of /actuator/health. With Redis down the balance is read
+      # from wallet_db (F2.6) and money never depends on Redis, so the service must stay healthy. PostgreSQL and
+      # RabbitMQ stay in the health check.
+      enabled: false
 adapters:
   rabbitmq:
     confirm-timeout: "5s"
