@@ -10,7 +10,7 @@ spec.md §1: *"`transferId` (when it applies) and `correlationId` travel in ever
 4. Every service puts it in the logging context (SLF4J MDC) for the whole request, and its log pattern prints it:
 
    ```
-   2026-11-02T23:36:15.069Z  WARN 1 --- [identity-service] [nio-8080-exec-2] [438c799f-3d91-43ae-849b-650c9f4d314f] c.c.finova.identity.api.AuthController   : Login rejected: invalid credentials
+   2026-11-03T00:30:49.952Z  WARN 1 --- [identity-service] [nio-8080-exec-2] [b76d46ee-654b-4484-b481-39a755cd6b11] [fae888b5cb92f5f5f46a5587bd4f8f49,4e77f5a79774d381] c.c.finova.identity.api.AuthController   : Login rejected: invalid credentials
    ```
 
 5. Alloy ships the stdout of every container to Loki with a `service` label (the compose service name).
@@ -24,7 +24,7 @@ Done in: `api-gateway` and `identity-service`.
 3. Query every service at once:
 
    ```logql
-   {service=~".+"} |= "438c799f-3d91-43ae-849b-650c9f4d314f"
+   {service=~".+"} |= "b76d46ee-654b-4484-b481-39a755cd6b11"
    ```
 
    Or only some of them: `{service=~"api-gateway|identity-service"} |= "<id>"`.
