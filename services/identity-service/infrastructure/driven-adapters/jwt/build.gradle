@@ -1,0 +1,6 @@
+dependencies {
+    implementation project(':model')
+    implementation 'org.springframework:spring-context'
+    // Same library and version the Gateway verifies with; Spring Boot does not manage it.
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.47'
+}

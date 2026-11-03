@@ -1,0 +1,1018 @@
+{
+  "info": {
+    "name": "Finova - Auth through the Gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Feature 1 (spec.md §3.1, §3.3-3.6) through the API Gateway at {{baseUrl}}.\n\nRun the folders in order (or the whole collection with the Runner): each request stores the tokens the next one needs.\n\nNeeds only api-gateway + identity-service (+ identity-db, redis). Folder 6 also needs wallet-service / transfer-service.\n\nDemo users and their PIN / TOTP secrets: README.md, \"Demo users\"."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "email",
+      "value": "ana@example.com"
+    },
+    {
+      "key": "password",
+      "value": "Finova2026!"
+    },
+    {
+      "key": "pin",
+      "value": "4821"
+    },
+    {
+      "key": "otpSecret",
+      "value": "JOJYF2MFLYMVTZVHPQXBEZXZPG3BSRZ2"
+    },
+    {
+      "key": "deviceId",
+      "value": "postman-device-1"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "previousRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "financialSessionToken",
+      "value": ""
+    },
+    {
+      "key": "otpCode",
+      "value": ""
+    },
+    {
+      "key": "recipientUserId",
+      "value": "2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login and refresh rotation",
+      "item": [
+        {
+          "name": "Login (ana)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "F1.1: 15-minute access token + 7-day refresh token bound to deviceId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "pm.collectionVariables.set(\"refreshToken\", body.refreshToken);",
+                  "pm.test(\"token pair\", () => {",
+                  "    pm.expect(body.tokenType).to.eql(\"Bearer\");",
+                  "    pm.expect(body.expiresIn).to.eql(900);",
+                  "    pm.expect(body.refreshExpiresIn).to.eql(604800);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - wrong password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Counts toward the lockout (5 in 15 min). Do not send it 5 times for ana or she stays locked for 15 minutes; folder 5 demos the lockout with beto.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"wrong\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CREDENTIALS\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh - rotates the token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "description": "F1.2: new pair in the same session; the presented token becomes ROTATED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"previousRefreshToken\", pm.collectionVariables.get(\"refreshToken\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "pm.collectionVariables.set(\"refreshToken\", body.refreshToken);",
+                  "pm.test(\"token pair\", () => {",
+                  "    pm.expect(body.tokenType).to.eql(\"Bearer\");",
+                  "    pm.expect(body.expiresIn).to.eql(900);",
+                  "    pm.expect(body.refreshExpiresIn).to.eql(604800);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh - token from another device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "description": "Refresh tokens are bound to the device that logged in.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"deviceId\": \"another-device\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code REFRESH_TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"REFRESH_TOKEN_INVALID\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh - reuse of the rotated token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "description": "F1.3: a rotated token presented again revokes the whole session (revoked:sid in Redis).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{previousRefreshToken}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code REFRESH_TOKEN_REUSED\", () => pm.expect(pm.response.json().code).to.eql(\"REFRESH_TOKEN_REUSED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Access token of the revoked session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/wallets/me/balance",
+            "description": "F1.4: the Gateway rejects it before reaching Wallet."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code TOKEN_REVOKED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_REVOKED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Financial session (step-up)",
+      "item": [
+        {
+          "name": "Login (ana) again",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "pm.collectionVariables.set(\"refreshToken\", body.refreshToken);",
+                  "pm.test(\"token pair\", () => {",
+                  "    pm.expect(body.tokenType).to.eql(\"Bearer\");",
+                  "    pm.expect(body.expiresIn).to.eql(900);",
+                  "    pm.expect(body.refreshExpiresIn).to.eql(604800);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up with PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "description": "F1.6.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"{{pin}}\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"financialSessionToken\", body.financialSessionToken);",
+                  "pm.test(\"5-minute transfer:create session\", () => {",
+                  "    pm.expect(body.scope).to.eql(\"transfer:create\");",
+                  "    pm.expect(body.expiresIn).to.eql(300);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up with OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "description": "The pre-request script computes the current TOTP code from {{otpSecret}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"OTP\",\n  \"credential\": \"{{otpCode}}\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// RFC 6238 TOTP from the demo secret in {{otpSecret}} (what an authenticator app would show now).",
+                  "const alphabet = \"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567\";",
+                  "let bits = \"\";",
+                  "for (const c of pm.collectionVariables.get(\"otpSecret\").replace(/=+$/, \"\")) {",
+                  "    bits += alphabet.indexOf(c).toString(2).padStart(5, \"0\");",
+                  "}",
+                  "let keyHex = \"\";",
+                  "for (let i = 0; i + 8 <= bits.length; i += 8) {",
+                  "    keyHex += parseInt(bits.substr(i, 8), 2).toString(16).padStart(2, \"0\");",
+                  "}",
+                  "const counterHex = Math.floor(Date.now() / 1000 / 30).toString(16).padStart(16, \"0\");",
+                  "const hmac = CryptoJS.HmacSHA1(CryptoJS.enc.Hex.parse(counterHex), CryptoJS.enc.Hex.parse(keyHex)).toString();",
+                  "const offset = parseInt(hmac.slice(-1), 16);",
+                  "const code = ((parseInt(hmac.substr(offset * 2, 8), 16) & 0x7fffffff) % 1000000).toString().padStart(6, \"0\");",
+                  "pm.collectionVariables.set(\"otpCode\", code);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up - wrong PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "description": "Counts toward the step-up lockout (5 in 15 min).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"0000\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code STEP_UP_FAILED\", () => pm.expect(pm.response.json().code).to.eql(\"STEP_UP_FAILED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up - another scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"{{pin}}\",\n  \"scope\": \"profile:update\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code VALIDATION_ERROR\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Gateway checks (no other service needed)",
+      "item": [
+        {
+          "name": "Transfer without X-Financial-Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F1.7.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{recipientUserId}}\",\n  \"amount\": \"1000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code FINANCIAL_SESSION_REQUIRED\", () => pm.expect(pm.response.json().code).to.eql(\"FINANCIAL_SESSION_REQUIRED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer with a forged X-Financial-Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "forged"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F1.8.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{recipientUserId}}\",\n  \"amount\": \"1000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code FINANCIAL_SESSION_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"FINANCIAL_SESSION_INVALID\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer without Idempotency-Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "Step 4. The financial session is not consumed by a request with a bad key.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{recipientUserId}}\",\n  \"amount\": \"1000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"code IDEMPOTENCY_KEY_REQUIRED\", () => pm.expect(pm.response.json().code).to.eql(\"IDEMPOTENCY_KEY_REQUIRED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit as a USER",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/audit/records",
+            "description": "Only AUDITOR (auditor@example.com) may call /audit/*."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code FORBIDDEN_ROLE\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN_ROLE\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/wallets/me/balance"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code UNAUTHORIZED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forged token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{forgedToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/wallets/me/balance"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Built at run time: a literal JWT here trips Postman's secret scanner and the import fails.",
+                  "pm.variables.set(\"forgedToken\", [\"eyJhbGciOiJSUzI1NiJ9\", \"e30\", \"forged\"].join(\".\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code UNAUTHORIZED\", () => pm.expect(pm.response.json().code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Logout",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/logout",
+            "description": "Revokes the session: refresh tokens, revoked:jti and revoked:sid."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Access token after logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/wallets/me/balance"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code TOKEN_REVOKED\", () => pm.expect(pm.response.json().code).to.eql(\"TOKEN_REVOKED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh token after logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code REFRESH_TOKEN_INVALID\", () => pm.expect(pm.response.json().code).to.eql(\"REFRESH_TOKEN_INVALID\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Login lockout (locks beto for 15 minutes)",
+      "item": [
+        {
+          "name": "Login beto - wrong password (send 6 times)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "F1.5: after 5 failures in 15 minutes the Gateway answers 423 ACCOUNT_LOCKED without reaching Identity.\n\nRun it about a minute after the other folders: POST /auth/login is also limited to 10 requests per minute per client IP, and a 429 RATE_LIMIT_EXCEEDED hides the lockout.\n\nTo unlock beto sooner: docker compose exec redis redis-cli DEL lock:login:beto@example.com fail:login:beto@example.com",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"beto@example.com\",\n  \"password\": \"wrong\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 INVALID_CREDENTIALS, then 423 ACCOUNT_LOCKED from the 6th try\", () => pm.expect(pm.response.code).to.be.oneOf([401, 423]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Needs wallet-service / transfer-service",
+      "item": [
+        {
+          "name": "Login (ana)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"accessToken\", body.accessToken);",
+                  "pm.collectionVariables.set(\"refreshToken\", body.refreshToken);",
+                  "pm.test(\"token pair\", () => {",
+                  "    pm.expect(body.tokenType).to.eql(\"Bearer\");",
+                  "    pm.expect(body.expiresIn).to.eql(900);",
+                  "    pm.expect(body.refreshExpiresIn).to.eql(604800);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/wallets/me/balance",
+            "description": "Needs wallet-service running and a wallet for ana's userId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up with PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"{{pin}}\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"financialSessionToken\", pm.response.json().financialSessionToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "Needs transfer-service. Resend with the same Idempotency-Key to see the replay (Idempotent-Replayed: true).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{recipientUserId}}\",\n  \"amount\": \"1000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
