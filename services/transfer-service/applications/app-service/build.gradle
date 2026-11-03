@@ -1,6 +1,8 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
+	implementation project(':outbox-relay')
+	implementation project(':rabbitmq-consumer')
 	implementation project(':message-json')
 	implementation project(':rabbitmq-publisher')
 	implementation project(':jpa-repository')
@@ -16,6 +18,9 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
+    // Local RabbitMQ with infra/rabbitmq/definitions.json; never a shared broker.
+    testImplementation 'org.testcontainers:rabbitmq'
+    testImplementation 'org.springframework.boot:spring-boot-starter-amqp'
 }
 
 tasks.register('explodedJar', Copy) {

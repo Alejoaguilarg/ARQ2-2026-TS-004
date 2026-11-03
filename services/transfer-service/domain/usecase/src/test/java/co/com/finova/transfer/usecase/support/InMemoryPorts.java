@@ -173,4 +173,29 @@ public final class InMemoryPorts {
     public MessageEnvelope<?> envelopeOf(MessagePayload payload) {
         return outbox.stream().filter(m -> m.envelope().payload() == payload).findFirst().orElseThrow().envelope();
     }
+
+    /** Captures the use cases' System.Logger output (JUL in tests). */
+    public static final class CapturedLogs extends java.util.logging.Handler {
+        private final List<java.util.logging.LogRecord> records = new ArrayList<>();
+
+        @Override
+        public void publish(java.util.logging.LogRecord logRecord) {
+            records.add(logRecord);
+        }
+
+        @Override
+        public void flush() {
+            // nothing buffered
+        }
+
+        @Override
+        public void close() {
+            // nothing to release
+        }
+
+        public List<String> messages(java.util.logging.Level level) {
+            return records.stream().filter(r -> r.getLevel().equals(level))
+                    .map(java.util.logging.LogRecord::getMessage).toList();
+        }
+    }
 }
