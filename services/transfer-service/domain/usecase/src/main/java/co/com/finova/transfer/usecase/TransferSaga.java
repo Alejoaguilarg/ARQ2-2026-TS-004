@@ -14,14 +14,18 @@ import co.com.finova.transfer.model.message.event.WalletCredited;
 import co.com.finova.transfer.model.message.event.WalletDebited;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import co.com.finova.transfer.model.Transfer;
+import co.com.finova.transfer.model.TransferRepository;
 import co.com.finova.transfer.model.message.gateways.MessagePublisher;
 import co.com.finova.transfer.model.message.gateways.OutboxMessage;
 import co.com.finova.transfer.model.message.gateways.OutboxRepository;
 import co.com.finova.transfer.model.message.gateways.ProcessedMessageRepository;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Component
 public class TransferSaga {
 
     public static final int MAX_CREDIT_ATTEMPTS = 3;
@@ -32,15 +36,18 @@ public class TransferSaga {
     private final OutboxRepository outboxRepository;
     private final ProcessedMessageRepository processedMessageRepository;
     private final MessagePublisher messagePublisher;
+    private final TransferRepository transferRepository;
     private final ObjectMapper objectMapper;
 
     public TransferSaga(OutboxRepository outboxRepository,
                         ProcessedMessageRepository processedMessageRepository,
                         MessagePublisher messagePublisher,
+                        TransferRepository transferRepository,
                         ObjectMapper objectMapper) {
         this.outboxRepository = outboxRepository;
         this.processedMessageRepository = processedMessageRepository;
         this.messagePublisher = messagePublisher;
+        this.transferRepository = transferRepository;
         this.objectMapper = objectMapper;
     }
 
