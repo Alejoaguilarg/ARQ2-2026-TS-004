@@ -1,0 +1,51 @@
+apply plugin: 'org.springframework.boot'
+
+// Spring Boot 3.4 pins Testcontainers 1.20, which Docker Engine 29+ rejects (API version too old).
+ext['testcontainers.version'] = '1.21.4'
+
+dependencies {
+	implementation project(':totp')
+	implementation project(':argon2')
+	testImplementation 'org.springframework:spring-web'
+	implementation project(':api-rest')
+	implementation project(':jwt')
+	implementation project(':jpa-repository')
+	implementation project(':redis')
+    implementation project(':model')
+    implementation project(':usecase')
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    // Traces to Tempo through Alloy (MANAGEMENT_OTLP_TRACING_ENDPOINT in docker-compose); nothing is sent without it.
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+    runtimeOnly('org.springframework.boot:spring-boot-devtools')
+    testImplementation 'com.tngtech.archunit:archunit:1.3.0'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework:spring-jdbc'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.47'
+}
+
+pitest {
+    // Mutation testing reruns tests per mutant; booting Identity with PostgreSQL and Redis per run is too slow.
+    excludedTestClasses = ['*IntegrationTest']
+}
+
+tasks.register('explodedJar', Copy) {
+    with jar
+    into layout.buildDirectory.dir("exploded")
+}
+
+jar {
+    // To disable the *-plain.jar
+    enabled = false
+}
+
+bootJar {
+    // Sets output jar name
+    archiveFileName = "${project.getParent().getName()}.${archiveExtension.get()}"
+}

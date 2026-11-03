@@ -1,0 +1,8 @@
+dependencies {
+    implementation project(':model')
+    implementation 'org.springframework:spring-context'
+    implementation 'org.springframework.security:spring-security-crypto'
+    // Argon2PasswordEncoder's implementation; Spring Boot does not manage its version.
+    runtimeOnly 'org.bouncycastle:bcprov-jdk18on:1.79'
+    testRuntimeOnly 'org.bouncycastle:bcprov-jdk18on:1.79'
+}
