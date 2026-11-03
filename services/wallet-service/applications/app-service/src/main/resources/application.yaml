@@ -28,8 +28,14 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+      # W3C trace context (traceparent) in the AMQP headers of every published message, never in the §4.1
+      # envelope. Override with SPRING_RABBITMQ_TEMPLATE_OBSERVATION_ENABLED.
+      observation-enabled: true
     listener:
       simple:
+        # The listeners continue the trace of an incoming message that carries traceparent.
+        # Override with SPRING_RABBITMQ_LISTENER_SIMPLE_OBSERVATION_ENABLED.
+        observation-enabled: true
         # Spec §4.2: manual acks; a rejected delivery is never requeued, so the queue dead-letters it to
         # its .retry queue (5 s) and it comes back. The listeners only consume existing queues.
         acknowledge-mode: "manual"
@@ -39,8 +45,9 @@ spring:
 logging:
   pattern:
     # Spec §1.4 and the team log format (pending item 6): correlationId and transferId in every log line,
-    # from the MDC (CorrelationIdFilter for HTTP, MessageLogContext for messages). Empty brackets when absent.
-    correlation: "[%X{correlationId:-}] [%X{transferId:-}] "
+    # from the MDC (CorrelationIdFilter for HTTP, MessageLogContext for messages), then [traceId,spanId] for
+    # Grafana's link to Tempo (it finds the pair anywhere in the line). Empty brackets when absent.
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] [%X{traceId:-},%X{spanId:-}] "
 management:
   endpoints:
     web:
@@ -50,6 +57,13 @@ management:
     health:
       probes:
         enabled: true
+  # Traces: the OTLP endpoint and the sampling come only from the environment (x-app-env in docker-compose);
+  # without an endpoint nothing is exported. MANAGEMENT_TRACING_ENABLED=false turns tracing off.
+  observations:
+    enable:
+      # The outbox relay runs every 100 ms and the rebuild job every 5 min: one trace per run would bury the
+      # real ones in Tempo.
+      "[tasks.scheduled.execution]": false
   health:
     redis:
       # Decision S7 (pending item 24): Redis stays out of /actuator/health. With Redis down the balance is read

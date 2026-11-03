@@ -98,6 +98,9 @@ the root `.env` file (see `.env.example`).
 | `ADAPTERS_RABBITMQ_CONFIRM_TIMEOUT` | `5s` | Wait for a publisher confirm |
 | `ADAPTERS_OUTBOX_RELAY_ENABLED`, `ADAPTERS_OUTBOX_RELAY_INTERVAL`, `ADAPTERS_OUTBOX_BATCH_SIZE` | `true`, `100ms`, `100` | Outbox relay (S3) |
 | `ADAPTERS_BALANCE_REBUILD_ENABLED`, `ADAPTERS_BALANCE_REBUILD_INTERVAL`, `ADAPTERS_BALANCE_REBUILD_PAGE_SIZE` | `true`, `5m`, `500` | Balance cache rebuild job (S6) |
+| `MANAGEMENT_OTLP_TRACING_ENDPOINT`, `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | set by the compose (`x-app-env`): Alloy, every request | Where traces go; without an endpoint nothing is exported |
+| `MANAGEMENT_TRACING_ENABLED` | `true` | `false` turns tracing off |
+| `SPRING_RABBITMQ_TEMPLATE_OBSERVATION_ENABLED`, `SPRING_RABBITMQ_LISTENER_SIMPLE_OBSERVATION_ENABLED` | `true` | Trace context in the AMQP headers of published and consumed messages |
 
 ## Running it
 
@@ -145,9 +148,14 @@ commented lines in `.env.example`) and start the stack as above:
 
 ## Observability
 
-- **Logs:** every line carries `[correlationId] [transferId]` after the thread name (empty brackets when they do
-  not apply). HTTP requests take the id from `X-Correlation-Id`; message consumers take both ids from the envelope;
-  each run of the rebuild job opens its own `correlationId`.
+- **Logs:** every line carries `[correlationId] [transferId] [traceId,spanId]` after the thread name (empty brackets
+  when they do not apply). HTTP requests take the id from `X-Correlation-Id`; message consumers take both ids from
+  the envelope; each run of the rebuild job opens its own `correlationId`. Grafana links the `traceId` to Tempo.
+- **Traces:** sent over OTLP to Alloy, which forwards them to Tempo. A request from the Gateway continues the
+  Gateway's trace (`traceparent` header). Published messages carry `traceparent` in their AMQP headers (never in the
+  §4.1 envelope) and the listeners continue it. The outbox relay publishes on its own thread, so a command and its
+  reply are separate traces; the `correlationId` links the whole saga. Scheduled runs (relay, rebuild job) are not
+  traced. If Alloy or Tempo is down, spans are dropped in the background and requests are not slowed down.
 - **Metrics:** `/actuator/prometheus` (HTTP latency histograms, JVM, HikariCP, RabbitMQ).
 - **Health:** `/actuator/health` (with `liveness` and `readiness` groups) checks PostgreSQL and RabbitMQ. Redis is
   left out on purpose (decision S7): with Redis down the balance is still answered from `wallet_db` and no money
