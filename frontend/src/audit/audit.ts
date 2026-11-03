@@ -105,7 +105,9 @@ const BLOCKED: Record<string, string> = {
 };
 
 export function read(r: AuditRecord): Reading {
-  const [badge, tone] = BADGES[r.outcome] ?? ['Registrado', 'plain'];
+  const [shown, tone] = BADGES[r.outcome] ?? ['Registrado', 'plain'];
+  // Only the Gateway blocks; a no from Transfer or Wallet is a rejection.
+  const badge = r.outcome === 'REJECTED' && r.source !== 'GATEWAY' ? 'Rechazado' : shown;
   const who = customer(r.userId);
   const say = (what: string, explain: string): Reading => ({ what, explain, badge, tone });
   const key = `${r.source} ${r.stage} ${r.outcome}`;
