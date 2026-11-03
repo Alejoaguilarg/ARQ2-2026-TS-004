@@ -48,17 +48,19 @@ class LogCorrelationTest extends MessagingTestBase {
         UUID correlationId = UUID.randomUUID();
         UUID transferId = UUID.randomUUID();
         String messageId = UUID.randomUUID().toString();
+        UUID userId = UUID.randomUUID();
         String payload = """
                 {"walletId":"%s","userId":"%s","available":"100.00","version":1}"""
-                .formatted(UUID.randomUUID(), UUID.randomUUID());
+                .formatted(UUID.randomUUID(), userId);
+        // Other test classes share the broker and may project their own BalanceChanged at the same time, so the line
+        // is matched by this message's userId, not by the first projection line.
+        String ownLine = "BalanceChanged projected version=1 userId=" + userId;
 
         publish("wallet.events", "wallet.balance-changed", messageId,
                 envelope(messageId, "BalanceChanged", correlationId, transferId, "wallet-service", payload));
 
-        await("projection log line", Duration.ofSeconds(10),
-                () -> output.getOut().contains("BalanceChanged projected"));
-        assertThat(lineContaining(output, "BalanceChanged projected"))
-                .contains("[" + correlationId + "] [" + transferId + "] ");
+        await("projection log line", Duration.ofSeconds(10), () -> output.getOut().contains(ownLine));
+        assertThat(lineContaining(output, ownLine)).contains("[" + correlationId + "] [" + transferId + "] ");
     }
 
     private static String lineContaining(CapturedOutput output, String text) {
