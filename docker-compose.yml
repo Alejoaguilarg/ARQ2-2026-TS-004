@@ -12,18 +12,21 @@ x-app: &app
   profiles: ["apps"]
   restart: unless-stopped
   networks: [backend]
+
 x-app-env: &app-env
   SPRING_PROFILES_ACTIVE: docker
   SPRING_DATA_REDIS_HOST: redis
   SPRING_DATA_REDIS_PORT: "6379"
-  SPRING_RABBITMQ_HOST: jackal.rmq.cloudamqp.com
-  SPRING_RABBITMQ_PORT: "5671"
-  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
-  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-finova}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-finova}
   SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
   SPRING_JPA_DATABASEPLATFORM: org.hibernate.dialect.PostgreSQLDialect
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
-  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"
+  # Latency histograms for the p95 panels. Passed as JSON because an env var cannot spell the dash in
+  # percentiles-histogram: MANAGEMENT_..._PERCENTILES_HISTOGRAM_... binds to "percentiles" and fails startup.
+  SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
   # Take effect once a service adds micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp.
   MANAGEMENT_OTLP_TRACING_ENDPOINT: http://alloy:4318/v1/traces
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
@@ -116,6 +119,7 @@ services:
     healthcheck: *app-healthcheck
     depends_on:
       transfer-db: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
 
   audit-service:
     <<: *app
@@ -202,6 +206,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ---------------------------------------------------------------- message broker
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-finova}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-finova}
+    ports:
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  # Loads exchanges, quorum queues, retry queues and DLQs from spec.md §4.2 / §4.5.
+  rabbitmq-init:
+    image: curlimages/curl:8.15.0
+    networks: [backend]
+    volumes:
+      - ./infra/rabbitmq/definitions.json:/definitions.json:ro
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-finova}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-finova}
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        curl -fsS -u "$$RABBITMQ_USER:$$RABBITMQ_PASSWORD"
+        -H "Content-Type: application/json"
+        -X POST --data @/definitions.json
+        http://rabbitmq:15672/api/definitions
+        && echo "RabbitMQ topology loaded"
+    depends_on:
+      rabbitmq: { condition: service_healthy }
 
   # ---------------------------------------------------------------- external system (mock in Wave 2)
   notification-provider-mock:
