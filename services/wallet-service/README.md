@@ -67,6 +67,9 @@ shared environment.
 
 - Every message carries the §4.1 envelope and leaves through the **transactional outbox**: the relay publishes
   pending rows every 100 ms in batches of 100, with publisher confirms (decision S3).
+- A row that fails to publish (for example, an exchange or a permission missing in the broker) logs an ERROR with
+  its `messageId`, records the attempt, and is retried after 1 s, 2 s, 4 s… up to 5 min. It never blocks the rows
+  after it and is never dropped (`attempts`, `next_attempt_at` and `last_error` in `outbox_messages`, migration V3).
 - Consumers use manual acks. A technical error rejects the delivery without requeue; the queue sends it to its
   `.retry` queue (5 s) and back. After 3 retries (4 deliveries) the message goes to the `.dlq` (decision S1).
 - Invalid JSON, an unknown `type` or a contract violation goes straight to the `.dlq` without retries
@@ -97,7 +100,11 @@ the root `.env` file (see `.env.example`).
 | `ADAPTERS_RABBITMQ_MAX_RETRIES` | `3` | Retries before the `.dlq` (S1) |
 | `ADAPTERS_RABBITMQ_CONFIRM_TIMEOUT` | `5s` | Wait for a publisher confirm |
 | `ADAPTERS_OUTBOX_RELAY_ENABLED`, `ADAPTERS_OUTBOX_RELAY_INTERVAL`, `ADAPTERS_OUTBOX_BATCH_SIZE` | `true`, `100ms`, `100` | Outbox relay (S3) |
+| `ADAPTERS_OUTBOX_RETRY_INITIAL_DELAY`, `ADAPTERS_OUTBOX_RETRY_MAX_DELAY` | `1s`, `5m` | Wait before retrying a row that failed to publish, doubled after each failure up to the maximum |
 | `ADAPTERS_BALANCE_REBUILD_ENABLED`, `ADAPTERS_BALANCE_REBUILD_INTERVAL`, `ADAPTERS_BALANCE_REBUILD_PAGE_SIZE` | `true`, `5m`, `500` | Balance cache rebuild job (S6) |
+| `MANAGEMENT_OTLP_TRACING_ENDPOINT`, `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | set by the compose (`x-app-env`): Alloy, every request | Where traces go; without an endpoint nothing is exported |
+| `MANAGEMENT_TRACING_ENABLED` | `true` | `false` turns tracing off |
+| `SPRING_RABBITMQ_TEMPLATE_OBSERVATION_ENABLED`, `SPRING_RABBITMQ_LISTENER_SIMPLE_OBSERVATION_ENABLED` | `true` | Trace context in the AMQP headers of published and consumed messages |
 
 ## Running it
 
@@ -145,9 +152,14 @@ commented lines in `.env.example`) and start the stack as above:
 
 ## Observability
 
-- **Logs:** every line carries `[correlationId] [transferId]` after the thread name (empty brackets when they do
-  not apply). HTTP requests take the id from `X-Correlation-Id`; message consumers take both ids from the envelope;
-  each run of the rebuild job opens its own `correlationId`.
+- **Logs:** every line carries `[correlationId] [transferId] [traceId,spanId]` after the thread name (empty brackets
+  when they do not apply). HTTP requests take the id from `X-Correlation-Id`; message consumers take both ids from
+  the envelope; each run of the rebuild job opens its own `correlationId`. Grafana links the `traceId` to Tempo.
+- **Traces:** sent over OTLP to Alloy, which forwards them to Tempo. A request from the Gateway continues the
+  Gateway's trace (`traceparent` header). Published messages carry `traceparent` in their AMQP headers (never in the
+  §4.1 envelope) and the listeners continue it. The outbox relay publishes on its own thread, so a command and its
+  reply are separate traces; the `correlationId` links the whole saga. Scheduled runs (relay, rebuild job) are not
+  traced. If Alloy or Tempo is down, spans are dropped in the background and requests are not slowed down.
 - **Metrics:** `/actuator/prometheus` (HTTP latency histograms, JVM, HikariCP, RabbitMQ).
 - **Health:** `/actuator/health` (with `liveness` and `readiness` groups) checks PostgreSQL and RabbitMQ. Redis is
   left out on purpose (decision S7): with Redis down the balance is still answered from `wallet_db` and no money
