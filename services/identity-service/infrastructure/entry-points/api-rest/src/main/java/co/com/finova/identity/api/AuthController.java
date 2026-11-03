@@ -8,6 +8,7 @@ import co.com.finova.identity.usecase.session.FinancialSessionUseCase;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.LogoutUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
+import io.micrometer.core.instrument.Metrics;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,7 @@ public class AuthController {
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MAX_DEVICE_ID = 128;
     private static final System.Logger LOG = System.getLogger(AuthController.class.getName());
+    static final String SECURITY_EVENTS = "finova.identity.security.events";
 
     private final LoginUseCase login;
     private final RefreshSessionUseCase refresh;
@@ -77,10 +79,12 @@ public class AuthController {
             case LoginUseCase.Result.Issued issued -> ResponseEntity.ok(TokenPairBody.from(issued.tokens()));
             case LoginUseCase.Result.InvalidCredentials ignored -> {
                 LOG.log(System.Logger.Level.WARNING, "Login rejected: invalid credentials");
+                securityEvent("login_failed");
                 yield error(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password.", request);
             }
             case LoginUseCase.Result.Locked ignored -> {
                 LOG.log(System.Logger.Level.WARNING, "Login rejected: account locked");
+                securityEvent("account_locked");
                 yield error(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "The account is locked.", request);
             }
         };
@@ -97,6 +101,7 @@ public class AuthController {
                     "Refresh token is unknown, expired, revoked or bound to another device.", request);
             case RefreshSessionUseCase.Result.Reused ignored -> {
                 LOG.log(System.Logger.Level.WARNING, "Refresh token reused: the session was revoked");
+                securityEvent("refresh_reused");
                 yield error(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_REUSED",
                         "Refresh token was already used; the session has been revoked.", request);
             }
@@ -134,6 +139,7 @@ public class AuthController {
                     error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or expired access token.", request);
             case FinancialSessionUseCase.Result.StepUpFailed ignored -> {
                 LOG.log(System.Logger.Level.WARNING, "Step-up failed: wrong " + body.method() + " for user " + userId(request));
+                securityEvent("step_up_failed");
                 yield error(HttpStatus.UNAUTHORIZED, "STEP_UP_FAILED", "Wrong PIN or code.", request);
             }
         };
@@ -154,6 +160,11 @@ public class AuthController {
     ResponseEntity<Object> internalError(RuntimeException e, HttpServletRequest request) {
         LOG.log(System.Logger.Level.ERROR, "Unexpected error", e);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error.", request);
+    }
+
+    // finova_identity_security_events_total{event}: the same rejections as the WARN logs, for alerts and panels.
+    static void securityEvent(String event) {
+        Metrics.counter(SECURITY_EVENTS, "event", event).increment();
     }
 
     // Set by the Gateway from the verified token; anything else is not written to the logs.

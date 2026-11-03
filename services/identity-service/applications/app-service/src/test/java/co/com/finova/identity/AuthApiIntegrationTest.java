@@ -12,6 +12,7 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -35,6 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 // The whole service on real PostgreSQL (Flyway, demo users) and Redis, called over HTTP.
 @Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
+// Spring Boot tests turn metric exporters off; this keeps /actuator/prometheus as in the running app.
+@AutoConfigureObservability
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AuthApiIntegrationTest {
 
@@ -182,6 +185,10 @@ class AuthApiIntegrationTest {
                 .containsPattern("\\[" + loginId + "\\].*Login rejected: invalid credentials")
                 .containsPattern("\\[" + stepUpId + "\\].*Step-up failed: wrong PIN for user " + ana)
                 .doesNotContain("Wr0ng-Secret!", "ana@example.com", "9731", accessToken);
+        String metrics = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/actuator/prometheus")).build(), HttpResponse.BodyHandlers.ofString()).body();
+        assertThat(metrics).containsPattern("finova_identity_security_events_total\\{event=\"login_failed\"\\} [1-9]")
+                .containsPattern("finova_identity_security_events_total\\{event=\"step_up_failed\"\\} [1-9]");
     }
 
     private HttpResponse<String> stepUp(String accessToken, String method, String credential) throws Exception {

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -49,6 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 // revocation, financial session and idempotency in a real Redis, then the proxy to an upstream stub.
 @Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
+// Spring Boot tests turn metric exporters off; this keeps /actuator/prometheus as in the running app.
+@AutoConfigureObservability
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewayPipelineIntegrationTest {
 
@@ -137,6 +140,20 @@ class GatewayPipelineIntegrationTest {
         assertThat(retry.headers().firstValue("Idempotent-Replayed")).contains("true");
         assertThat(reused.statusCode()).isEqualTo(422);
         assertThat(TRANSFER_CALLS.get()).isOne();
+        assertThat(metrics()).contains("finova_gateway_idempotent_replays_total")
+                .contains("finova_gateway_rejections_total{code=\"IDEMPOTENCY_KEY_REUSED\",status=\"422\"}");
+    }
+
+    @Test
+    void rejectionsAreExportedToPrometheusByCode() throws Exception {
+        send(HttpRequest.newBuilder(uri("/wallets/me/balance")).GET());
+        send(HttpRequest.newBuilder(uri("/wallets/me/balance")).header("Authorization", "Bearer forged").GET());
+
+        assertThat(metrics()).containsPattern("finova_gateway_rejections_total\\{code=\"UNAUTHORIZED\",status=\"401\"\\} [1-9]");
+    }
+
+    private String metrics() throws Exception {
+        return send(HttpRequest.newBuilder(uri("/actuator/prometheus")).GET()).body();
     }
 
     @Test

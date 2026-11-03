@@ -189,7 +189,7 @@ class IdempotencyFilterTest {
         return request;
     }
 
-    private static final class InMemoryStore implements IdempotencyStore {
+    static final class InMemoryStore implements IdempotencyStore {
 
         private final Map<String, IdempotencyRecord> records = new HashMap<>();
         private boolean down;
