@@ -84,7 +84,8 @@ class TransferControllerTest {
         post(BODY, key)
                 .andExpect(status().isAccepted())
                 .andExpect(header().string("Location", "/transfers/a1b2c3d4-e5f6-7890-abcd-ef1234567890"))
-                .andExpect(header().string("X-Correlation-Id", correlationId))
+                // The Gateway returns it; a second copy from Transfer would duplicate the header.
+                .andExpect(header().doesNotExist("X-Correlation-Id"))
                 .andExpect(header().doesNotExist("Idempotent-Replayed"))
                 .andExpect(jsonPath("$.transferId").value("a1b2c3d4-e5f6-7890-abcd-ef1234567890"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
@@ -203,9 +204,10 @@ class TransferControllerTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/transfers")
                         .header("X-User-Id", sender.toString()).header("Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
-                .andExpect(status().isAccepted())
-                .andExpect(header().string("X-Correlation-Id", org.hamcrest.Matchers.matchesPattern(
-                        "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")));
+                .andExpect(status().isAccepted());
+
+        // The new id is used for the logs and the messages of this transfer.
+        verify(createTransfer).handle(any(), org.mockito.ArgumentMatchers.notNull());
     }
 
     @Test

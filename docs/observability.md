@@ -86,8 +86,9 @@ and `GatewayPipelineIntegrationTest` in the Gateway are examples.
 
 ## Traces
 
-The Gateway and Identity send traces to Tempo through Alloy (`MANAGEMENT_OTLP_TRACING_ENDPOINT` in docker-compose; every
-request is sampled). The Gateway propagates the trace to the service it calls, so one request is one trace:
+The Gateway, Identity, Wallet, Transfer and Audit send traces to Tempo through Alloy (`MANAGEMENT_OTLP_TRACING_ENDPOINT` in
+docker-compose; every request is sampled). The Gateway propagates the trace to the service it calls, so one request is
+one trace:
 
 ```
 api-gateway       http post /auth/**     (request received)
@@ -100,6 +101,12 @@ Every log line also carries `[traceId,spanId]` after the correlationId:
 ```
 WARN 1 --- [identity-service] [nio-8080-exec-2] [b76d46ee-654b-4484-b481-39a755cd6b11] [fae888b5cb92f5f5f46a5587bd4f8f49,4e77f5a79774d381] ... : Login rejected: invalid credentials
 ```
+
+A trace covers one HTTP request. Wallet carries `traceparent` in the AMQP headers and its listeners continue an incoming
+trace (wallet-service README), but the saga is still not one trace: Transfer's outbox relay publishes later, on another
+thread, and the outbox row does not keep the trace context. Follow a transfer across Transfer, Wallet, Audit and
+Notification by its `correlationId`, which every message carries (spec.md §4.1). Notification has no HTTP API, so it sends
+no traces.
 
 In Grafana, open a log line in **Explore → Loki** and click the **traceId** link to see its trace in Tempo; from a
 trace, **Logs for this span** goes back to Loki. A service adds tracing with two dependencies in `app-service`:
