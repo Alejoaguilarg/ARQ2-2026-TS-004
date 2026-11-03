@@ -103,6 +103,14 @@ alerts are shown, not sent (no email or Slack).
 `ServiceDown` fires for every service that is not running, so with only the Gateway and Identity up the others show as
 down. That is expected until the whole system runs with `--profile apps`.
 
+### Dashboard
+
+**Finova - Overview** (Grafana → Dashboards → Finova) shows them in two sections:
+
+- **Alerts**: the alerts firing now (`ALERTS{alertstate="firing"}`), colored by severity.
+- **Security**: Gateway rejections by code, Identity security events (both per minute) and the transfers answered
+  from Redis by idempotency in the selected range. Per-minute values can have decimals: Prometheus extrapolates `increase()`.
+
 ### Metrics behind the security alerts
 
 | Metric | Service | Labels |
@@ -110,6 +118,9 @@ down. That is expected until the whole system runs with `--profile apps`.
 | `finova_gateway_rejections_total` | Gateway | `code` (the ErrorResponse code, e.g. `TOKEN_REVOKED`, `RATE_LIMIT_EXCEEDED`), `status` |
 | `finova_gateway_idempotent_replays_total` | Gateway | none: retries answered from Redis without calling Transfer |
 | `finova_identity_security_events_total` | Identity | `event`: `login_failed`, `account_locked`, `refresh_reused`, `step_up_failed` |
+
+The counters an alert reads are registered at 0 when the service starts. A counter that first appears with value 1 has
+no earlier sample, so `increase()` reads 0 and the first event after a restart would not fire the alert.
 
 ### Testing the rules
 

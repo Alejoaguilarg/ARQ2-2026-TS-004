@@ -35,6 +35,15 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     // Retries answered from Redis without calling Transfer: the double charges this filter prevented (spec F3).
     static final String REPLAYS = "finova.gateway.idempotent.replays";
 
+    // Registered at 0 when this bean is created on start (GatewayResponses is only loaded on the first rejection):
+    // a counter born at 1 has no earlier sample, so increase() reads 0 and the first fail-closed after a restart
+    // would never fire SecurityStoreUnavailable (alerts.yml).
+    static {
+        Metrics.counter(GatewayResponses.REJECTIONS, "code", "SECURITY_STORE_UNAVAILABLE", "status", "503");
+        Metrics.counter(GatewayResponses.REJECTIONS, "code", "IDEMPOTENCY_STORE_UNAVAILABLE", "status", "503");
+        Metrics.counter(REPLAYS);
+    }
+
     private static final System.Logger LOG = System.getLogger(IdempotencyFilter.class.getName());
     private static final Pattern UUID_PATTERN =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
