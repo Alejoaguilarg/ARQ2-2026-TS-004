@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.util.concurrent.CancellationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,6 +36,28 @@ class UpstreamErrorFilterTest {
     @Test
     void socketTimeoutIs504() throws Exception {
         assertThat(send(failing(new SocketTimeoutException("Read timed out"))).getStatus()).isEqualTo(504);
+    }
+
+    @Test
+    void aReadTimeoutThatCancelsTheRequestIs504Too() throws Exception {
+        // What the JDK client throws when its read timeout cancels the exchange: no ResourceAccessException around it.
+        MockHttpServletResponse response = send((request, resp) -> {
+            throw new ServletException("Request processing failed", new CancellationException());
+        });
+
+        assertThat(response.getStatus()).isEqualTo(504);
+        assertThat(response.getContentAsString()).contains("\"UPSTREAM_UNAVAILABLE\"");
+    }
+
+    @Test
+    void aCancelledRequestAfterTheAnswerStartedIsNotRewritten() {
+        FilterChain chain = (request, response) -> {
+            response.getOutputStream().write('{');
+            response.flushBuffer();
+            throw new CancellationException();
+        };
+
+        assertThatThrownBy(() -> send(chain)).isInstanceOf(CancellationException.class);
     }
 
     @Test

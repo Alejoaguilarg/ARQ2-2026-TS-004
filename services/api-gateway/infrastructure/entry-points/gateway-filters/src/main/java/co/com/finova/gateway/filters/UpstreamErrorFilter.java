@@ -13,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.util.concurrent.CancellationException;
 
 // spec.md §3.1 step 5: an upstream that is down answers 502, one that times out answers 504, both
 // UPSTREAM_UNAVAILABLE. Runs last so IdempotencyFilter sees the 5xx and frees the key (§3.1.1).
@@ -30,13 +31,18 @@ public class UpstreamErrorFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, response);
         } catch (ServletException | RuntimeException e) {
-            ResourceAccessException upstream = find(e, ResourceAccessException.class);
-            if (upstream == null || response.isCommitted()) {
+            Throwable upstream = find(e, ResourceAccessException.class);
+            // The JDK client's read timeout can also surface as a cancelled request with no ResourceAccessException
+            // around it: which one comes first is a race, so both must answer 504, never a bare 500.
+            boolean cancelled = upstream == null && find(e, CancellationException.class) != null;
+            if (upstream == null && !cancelled || response.isCommitted()) {
                 throw e;
             }
-            boolean timeout = find(upstream, HttpTimeoutException.class) != null
+            boolean timeout = cancelled
+                    || find(upstream, HttpTimeoutException.class) != null
                     || find(upstream, SocketTimeoutException.class) != null;
-            LOG.log(System.Logger.Level.WARNING, "Upstream unavailable for " + RequestPaths.of(request), upstream);
+            LOG.log(System.Logger.Level.WARNING, "Upstream unavailable for " + RequestPaths.of(request),
+                    cancelled ? e : upstream);
             response.resetBuffer();
             GatewayResponses.error(request, response, timeout ? 504 : 502, "UPSTREAM_UNAVAILABLE",
                     "The service is temporarily unavailable.");
