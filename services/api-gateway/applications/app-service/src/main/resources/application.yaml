@@ -54,4 +54,6 @@ logging:
   pattern:
     # spec.md §1: the correlationId goes in every log line, so a request can be found in Loki by its id.
     # CorrelationIdFilter puts it in the MDC; the id is the X-Correlation-Id the client got back.
-    correlation: "[%X{correlationId:-}] "
+    # [correlationId] [traceId,spanId]: the second part links a log line to its trace in Tempo (Grafana Loki
+    # derived field in infra/observability/grafana/provisioning/datasources/datasources.yml).
+    correlation: "[%X{correlationId:-}] [%X{traceId:-},%X{spanId:-}] "

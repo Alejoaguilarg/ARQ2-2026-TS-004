@@ -184,6 +184,7 @@ class AuthApiIntegrationTest {
         assertThat(logs.getOut())
                 .containsPattern("\\[" + loginId + "\\].*Login rejected: invalid credentials")
                 .containsPattern("\\[" + stepUpId + "\\].*Step-up failed: wrong PIN for user " + ana)
+                .containsPattern("\\[" + loginId + "\\] \\[[0-9a-f]{32},[0-9a-f]{16}\\]")
                 .doesNotContain("Wr0ng-Secret!", "ana@example.com", "9731", accessToken);
         String metrics = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/actuator/prometheus")).build(), HttpResponse.BodyHandlers.ofString()).body();
