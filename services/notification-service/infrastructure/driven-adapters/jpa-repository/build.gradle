@@ -1,0 +1,19 @@
+dependencies {
+    implementation project(':model')
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    // The schema of notification_db lives with this adapter (spec §1.3: Flyway migrations)
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Integration test against a real PostgreSQL 16 (skipped when Docker is not running)
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+// Mutation testing would start a PostgreSQL container for every mutant: keep the integration test out of it
+pitest {
+    excludedTestClasses = ['co.com.finova.notification.jpa.*IntegrationTest']
+}

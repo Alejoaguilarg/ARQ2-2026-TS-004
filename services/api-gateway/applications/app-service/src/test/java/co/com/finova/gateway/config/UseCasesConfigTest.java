@@ -1,9 +1,11 @@
 package co.com.finova.gateway.config;
 
+import co.com.finova.gateway.model.audit.gateways.AttemptPublisher;
 import co.com.finova.gateway.model.idempotency.gateways.IdempotencyStore;
 import co.com.finova.gateway.model.security.gateways.CounterStore;
 import co.com.finova.gateway.model.security.gateways.SessionStore;
 import co.com.finova.gateway.model.security.gateways.TokenVerifier;
+import co.com.finova.gateway.usecase.audit.RecordAttemptUseCase;
 import co.com.finova.gateway.usecase.idempotency.IdempotencyUseCase;
 import co.com.finova.gateway.usecase.security.LockoutUseCase;
 import co.com.finova.gateway.usecase.security.RateLimitUseCase;
@@ -26,6 +28,7 @@ class UseCasesConfigTest {
             assertThat(context.getBean(RateLimitUseCase.class)).isNotNull();
             assertThat(context.getBean(LockoutUseCase.class)).isNotNull();
             assertThat(context.getBean(SessionUseCase.class)).isNotNull();
+            assertThat(context.getBean(RecordAttemptUseCase.class)).isNotNull();
         }
     }
 
@@ -51,6 +54,11 @@ class UseCasesConfigTest {
         @Bean
         TokenVerifier tokenVerifier() {
             return mock(TokenVerifier.class);
+        }
+
+        @Bean
+        AttemptPublisher attemptPublisher() {
+            return mock(AttemptPublisher.class);
         }
     }
 }

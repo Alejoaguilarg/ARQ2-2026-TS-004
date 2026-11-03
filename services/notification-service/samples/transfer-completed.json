@@ -1,0 +1,16 @@
+{
+  "messageId": "11111111-0000-4000-8000-000000000001",
+  "type": "TransferCompleted",
+  "correlationId": "5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e11",
+  "transferId": "a1b2c3d4-e5f6-4890-abcd-ef1234567801",
+  "producer": "transfer-service",
+  "occurredAt": "2026-11-02T15:00:00Z",
+  "payload": {
+    "transferId": "a1b2c3d4-e5f6-4890-abcd-ef1234567801",
+    "senderUserId": "7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c",
+    "recipientUserId": "2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f",
+    "amount": "150000.00",
+    "currency": "COP",
+    "completedAt": "2026-11-02T15:00:00Z"
+  }
+}

@@ -151,6 +151,13 @@ services:
       SPRING_DATASOURCE_USERNAME: ${NOTIFICATION_DB_USER:-notification}
       SPRING_DATASOURCE_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
       NOTIFICATION_PROVIDER_URI: http://notification-provider-mock:8080
+      # Optional real email through SMTP (Gmail with an app password). Off by default: every channel goes
+      # to the provider mock. Enable it from your own .env; see .env.example.
+      ADAPTERS_EMAIL_ENABLED: "${NOTIFICATION_EMAIL_ENABLED:-false}"
+      SPRING_MAIL_HOST: ${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: "${NOTIFICATION_SMTP_PORT:-587}"
+      SPRING_MAIL_USERNAME: ${NOTIFICATION_SMTP_USER:-}
+      SPRING_MAIL_PASSWORD: ${NOTIFICATION_SMTP_PASSWORD:-}
     healthcheck: *app-healthcheck
     depends_on:
       notification-db: { condition: service_healthy }

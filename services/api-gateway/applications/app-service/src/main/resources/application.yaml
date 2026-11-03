@@ -18,6 +18,15 @@ spring:
       # Fail fast so the Gateway can answer 503 (fail closed) instead of hanging on a dead Redis.
       timeout: "500ms"
       connect-timeout: "500ms"
+  rabbitmq:
+    # Publishes AttemptRecorded to audit.events (spec.md §3.1 step 6); the broker owns the topology.
+    dynamic: false
+    # A dead broker must fail the publish fast so the audit retries do not pile up (default is 60 s).
+    connection-timeout: "2s"
+    publisher-confirm-type: "correlated"
+    publisher-returns: true
+    template:
+      mandatory: true
   cloud:
     gateway:
       mvc:
@@ -46,6 +55,10 @@ finova:
     jwks-uri: ${JWKS_URI:http://localhost:8081/.well-known/jwks.json}
     issuer: ${JWT_ISSUER:finova-identity}
 management:
+  health:
+    rabbit:
+      # The audit is never in the critical path: a down broker must not take the Gateway out of service.
+      enabled: false
   endpoints:
     web:
       exposure:

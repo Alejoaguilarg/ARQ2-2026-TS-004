@@ -28,8 +28,14 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+      # W3C trace context (traceparent) in the AMQP headers of every published message, never in the §4.1
+      # envelope. Override with SPRING_RABBITMQ_TEMPLATE_OBSERVATION_ENABLED.
+      observation-enabled: true
     listener:
       simple:
+        # The listeners continue the trace of an incoming message that carries traceparent.
+        # Override with SPRING_RABBITMQ_LISTENER_SIMPLE_OBSERVATION_ENABLED.
+        observation-enabled: true
         # Spec §4.2: manual acks; a rejected delivery is never requeued, so the queue dead-letters it to
         # its .retry queue (5 s) and it comes back. The listeners only consume existing queues.
         acknowledge-mode: "manual"
@@ -39,8 +45,9 @@ spring:
 logging:
   pattern:
     # Spec §1.4 and the team log format (pending item 6): correlationId and transferId in every log line,
-    # from the MDC (CorrelationIdFilter for HTTP, MessageLogContext for messages). Empty brackets when absent.
-    correlation: "[%X{correlationId:-}] [%X{transferId:-}] "
+    # from the MDC (CorrelationIdFilter for HTTP, MessageLogContext for messages), then [traceId,spanId] for
+    # Grafana's link to Tempo (it finds the pair anywhere in the line). Empty brackets when absent.
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] [%X{traceId:-},%X{spanId:-}] "
 management:
   endpoints:
     web:
@@ -50,6 +57,19 @@ management:
     health:
       probes:
         enabled: true
+  # Traces: the OTLP endpoint and the sampling come only from the environment (x-app-env in docker-compose);
+  # without an endpoint nothing is exported. MANAGEMENT_TRACING_ENABLED=false turns tracing off.
+  observations:
+    enable:
+      # The outbox relay runs every 100 ms and the rebuild job every 5 min: one trace per run would bury the
+      # real ones in Tempo.
+      "[tasks.scheduled.execution]": false
+  health:
+    redis:
+      # Decision S7 (pending item 24): Redis stays out of /actuator/health. With Redis down the balance is read
+      # from wallet_db (F2.6) and money never depends on Redis, so the service must stay healthy. PostgreSQL and
+      # RabbitMQ stay in the health check.
+      enabled: false
 adapters:
   rabbitmq:
     confirm-timeout: "5s"
@@ -62,6 +82,10 @@ adapters:
     relay-enabled: true
     relay-interval: "100ms"
     batch-size: 100
+    # Pending item 28: a row that fails waits retry-initial-delay, doubled after each failure up to retry-max-delay,
+    # and is never dropped. Override with ADAPTERS_OUTBOX_RETRY_INITIAL_DELAY and ADAPTERS_OUTBOX_RETRY_MAX_DELAY.
+    retry-initial-delay: "1s"
+    retry-max-delay: "5m"
   balance-rebuild:
     # Decision S6 (spec §4.5, ADR 004): recompute the balance cache from wallet_db at startup and then every
     # interval. Override with ADAPTERS_BALANCE_REBUILD_ENABLED, ADAPTERS_BALANCE_REBUILD_INTERVAL and

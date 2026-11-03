@@ -3,16 +3,23 @@ package co.com.finova.wallet.usecase.relayoutbox;
 import co.com.finova.wallet.model.common.Contract;
 import co.com.finova.wallet.model.common.gateways.TransactionRunner;
 import co.com.finova.wallet.model.message.gateways.MessagePublisher;
+import co.com.finova.wallet.model.outbox.OutboxRetryBackoff;
 import co.com.finova.wallet.model.outbox.PendingOutboxMessage;
 import co.com.finova.wallet.model.outbox.gateways.OutboxRelayRepository;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 /**
- * Outbox relay (spec §1.4, ADR 002): publishes pending outbox rows in creation order, each one only after
- * the broker confirms it, and marks it as published. On the first failed publish it stops: that row and the
- * next ones stay pending for the next run. Delivery is at-least-once; consumers deduplicate on messageId.
+ * Outbox relay (spec §1.4, ADR 002): publishes the pending outbox rows that are due, in creation order, each one
+ * only after the broker confirms it, and marks it as published. Delivery is at-least-once; consumers deduplicate
+ * on messageId.
+ * <p>
+ * Pending item 28: a failed publish records the attempt and a retry time that grows with each failure
+ * ({@link OutboxRetryBackoff}), logs an ERROR, and ends the run. Until its retry time the row is skipped, so it
+ * never blocks the rows after it, and it is never dropped. Ending the run keeps a broker outage to one confirm
+ * timeout per run. Spec §4.5: no Wallet queue requires ordering, so a retried row may go out after newer ones.
  */
 public class RelayOutboxUseCase {
 
@@ -22,19 +29,21 @@ public class RelayOutboxUseCase {
     private final MessagePublisher publisher;
     private final TransactionRunner transactions;
     private final Clock clock;
+    private final OutboxRetryBackoff backoff;
 
     public RelayOutboxUseCase(OutboxRelayRepository outbox, MessagePublisher publisher,
-                              TransactionRunner transactions, Clock clock) {
+                              TransactionRunner transactions, Clock clock, OutboxRetryBackoff backoff) {
         this.outbox = outbox;
         this.publisher = publisher;
         this.transactions = transactions;
         this.clock = clock;
+        this.backoff = backoff;
     }
 
-    /** Publishes up to batchSize pending rows and returns how many were published. */
+    /** Publishes up to batchSize due rows and returns how many were published. */
     public int relay(int batchSize) {
         Contract.require(batchSize > 0, "batchSize must be > 0: " + batchSize);
-        return transactions.inTransaction(() -> publishBatch(outbox.lockPending(batchSize)));
+        return transactions.inTransaction(() -> publishBatch(outbox.lockPending(batchSize, clock.instant())));
     }
 
     private int publishBatch(List<PendingOutboxMessage> pending) {
@@ -49,15 +58,20 @@ public class RelayOutboxUseCase {
         return published;
     }
 
-    // Any publish error (no confirm, nack, unroutable, broker down) leaves the row pending.
+    // Any publish error (no confirm, nack, unroutable, broker down) leaves the row pending until its retry time.
     private boolean publish(PendingOutboxMessage message) {
         try {
             publisher.publish(message.toOutbound());
             return true;
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, () -> "Outbox publish failed, retrying on the next run: "
+            int attempts = message.attempts() + 1;
+            Instant nextAttemptAt = clock.instant().plus(backoff.delayAfter(attempts));
+            outbox.recordFailure(message.id(), attempts, nextAttemptAt, e.getMessage());
+            LOG.log(System.Logger.Level.ERROR, () -> "Outbox publish failed, the row stays pending: "
                     + e.getMessage()
                     + " messageId=" + message.id()
+                    + " attempt=" + attempts
+                    + " nextAttemptAt=" + nextAttemptAt
                     + " exchange=" + message.exchange()
                     + " routingKey=" + message.routingKey()
                     + " correlationId=" + message.correlationId()
