@@ -56,13 +56,13 @@ export function AuditPage() {
     event.preventDefault();
     const id = transferId.trim();
     if (id && !UUID.test(id)) {
-      setFormError('Pega el identificador completo del envío (36 caracteres).');
+      setFormError('Paste the full transfer identifier (36 characters).');
       return;
     }
     const query: Search = { userId: userId || undefined, transferId: id || undefined,
       from: dayBound(fromDay, false), to: dayBound(toDay, true) };
     if (!query.userId && !query.transferId && !query.from) {
-      setFormError('Elige un cliente, pega un envío o indica desde qué fecha buscar.');
+      setFormError('Choose a customer, paste a transfer or give a start date.');
       return;
     }
     setFormError('');
@@ -98,47 +98,47 @@ export function AuditPage() {
   return (
     <div className="audit">
       <div className="audit-head">
-        <h1>Actividad de envíos</h1>
-        <p className="muted">Todo lo que pasó con cada envío, incluso los intentos que no se completaron.</p>
+        <h1>Transfer activity</h1>
+        <p className="muted">Everything that happened to each transfer, including the attempts that did not complete.</p>
       </div>
 
       <section className="glass verify" aria-labelledby="verify-title">
         <div>
-          <h2 id="verify-title">¿El registro está intacto?</h2>
-          <p className="muted small">Comprobamos que ningún movimiento haya sido modificado ni borrado.</p>
+          <h2 id="verify-title">Is the record intact?</h2>
+          <p className="muted small">We check that no record was changed or deleted.</p>
         </div>
-        <button type="button" className="button" onClick={check} disabled={verifying}>{verifying ? 'Revisando…' : 'Revisar ahora'}</button>
+        <button type="button" className="button" onClick={check} disabled={verifying}>{verifying ? 'Checking…' : 'Check now'}</button>
         {verdict && (
           <p role="status" className={`notice ${verdict.valid ? 'ok' : 'bad'}`}>
             {verdict.valid
-              ? <><strong>Todo en orden.</strong> Revisamos {verdict.checkedRecords.toLocaleString('es-CO')} movimientos y ninguno fue modificado.</>
-              : <><strong>Atención: encontramos un movimiento alterado.</strong> El movimiento n.º {verdict.firstInvalidSeq?.toLocaleString('es-CO')} no coincide con lo que se guardó. Repórtalo al equipo de seguridad.</>}
+              ? <><strong>All good.</strong> We checked {verdict.checkedRecords.toLocaleString('en-US')} records and none was changed.</>
+              : <><strong>Warning: we found an altered record.</strong> Record no. {verdict.firstInvalidSeq?.toLocaleString('en-US')} does not match what was stored. Report it to the security team.</>}
           </p>
         )}
         {verifyProblem && <p role="alert" className="notice bad"><strong>{verifyProblem.title}.</strong> {verifyProblem.text}</p>}
       </section>
 
-      <form className="glass audit-search" onSubmit={submit} aria-label="Buscar movimientos" noValidate>
+      <form className="glass audit-search" onSubmit={submit} aria-label="Search records" noValidate>
         <label className="field">
-          Cliente
+          Customer
           <select value={userId} onChange={(e) => setUserId(e.target.value)}>
-            <option value="">Cualquiera</option>
+            <option value="">Any</option>
             {CUSTOMERS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
         <label className="field">
-          Envío
-          <input value={transferId} onChange={(e) => setTransferId(e.target.value)} placeholder="Identificador completo" spellCheck={false} />
+          Transfer
+          <input value={transferId} onChange={(e) => setTransferId(e.target.value)} placeholder="Full identifier" spellCheck={false} />
         </label>
         <label className="field">
-          Desde
+          From
           <input type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} />
         </label>
         <label className="field">
-          Hasta
+          To
           <input type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} />
         </label>
-        <button type="submit" className="button primary">Buscar</button>
+        <button type="submit" className="button primary">Search</button>
         {formError && <p role="alert" className="notice bad">{formError}</p>}
       </form>
 
@@ -146,18 +146,18 @@ export function AuditPage() {
         <section className="glass audit-list" aria-label="Resultados" aria-busy={loading}>
           <div className="row">
             <span className="muted small">
-              {loading ? 'Buscando…' : page ? (page.total === 0 ? 'Sin resultados' : `${page.total} movimientos`) : ''}
+              {loading ? 'Looking up…' : page ? (page.total === 0 ? 'No results' : `${page.total} records`) : ''}
             </span>
             <div className="pager">
-              <button type="button" className="icon-button" aria-label="Página anterior" disabled={loading || pageNo === 0}
+              <button type="button" className="icon-button" aria-label="Previous page" disabled={loading || pageNo === 0}
                 onClick={() => setPageNo((n) => n - 1)}>‹</button>
-              <span className="small">{pageNo + 1} de {pages}</span>
-              <button type="button" className="icon-button" aria-label="Página siguiente" disabled={loading || pageNo + 1 >= pages}
+              <span className="small">{pageNo + 1} of {pages}</span>
+              <button type="button" className="icon-button" aria-label="Next page" disabled={loading || pageNo + 1 >= pages}
                 onClick={() => setPageNo((n) => n + 1)}>›</button>
             </div>
           </div>
           {problem && <p role="alert" className="notice bad"><strong>{problem.title}.</strong> {problem.text}</p>}
-          {page && page.items.length === 0 && <p className="muted">No encontramos movimientos con esa búsqueda.</p>}
+          {page && page.items.length === 0 && <p className="muted">No records match that search.</p>}
           <ul>
             {page?.items.map((r) => {
               const reading = read(r);
@@ -188,17 +188,17 @@ export function AuditPage() {
 function Detail({ record, onTransfer }: { record: AuditRecord; onTransfer: (id: string) => void }) {
   const reading = read(record);
   const tech: [string, string][] = [
-    ['N.º de registro', String(record.seq)],
-    ['Evento', `${record.source} · ${record.stage} · ${record.outcome}`],
-    ['Código', record.reason ?? '—'],
-    ['Respuesta HTTP', record.httpStatus ? String(record.httpStatus) : '—'],
-    ['Usuario', record.userId ?? '—'],
-    ['Transferencia', record.transferId ?? '—'],
-    ['Clave del envío', record.idempotencyKey ?? '—'],
-    ['Correlación', record.correlationId],
-    ['Registrado', record.recordedAt],
-    ['Huella anterior', record.prevHash],
-    ['Huella', record.hash],
+    ['Record no.', String(record.seq)],
+    ['Event', `${record.source} · ${record.stage} · ${record.outcome}`],
+    ['Code', record.reason ?? '—'],
+    ['HTTP status', record.httpStatus ? String(record.httpStatus) : '—'],
+    ['User', record.userId ?? '—'],
+    ['Transfer', record.transferId ?? '—'],
+    ['Idempotency key', record.idempotencyKey ?? '—'],
+    ['Correlation', record.correlationId],
+    ['Recorded', record.recordedAt],
+    ['Previous hash', record.prevHash],
+    ['Hash', record.hash],
   ];
   return (
     <aside className="glass audit-detail" aria-labelledby="detail-title">
@@ -206,16 +206,16 @@ function Detail({ record, onTransfer }: { record: AuditRecord; onTransfer: (id: 
       <h2 id="detail-title">{reading.what}</h2>
       <p className="muted">{reading.explain}</p>
       <dl className="summary">
-        <div><dt>Cliente</dt><dd>{customer(record.userId)}</dd></div>
-        <div><dt>Monto</dt><dd>{record.amount ? `$${formatMoney(record.amount)} COP` : 'Sin monto'}</dd></div>
-        <div><dt>Comprobante</dt><dd>{record.transferId ? receipt(record.transferId) : '—'}</dd></div>
-        <div><dt>Fecha</dt><dd>{when(record.occurredAt)}</dd></div>
+        <div><dt>Customer</dt><dd>{customer(record.userId)}</dd></div>
+        <div><dt>Amount</dt><dd>{record.amount ? `$${formatMoney(record.amount)} COP` : 'No amount'}</dd></div>
+        <div><dt>Receipt</dt><dd>{record.transferId ? receipt(record.transferId) : '—'}</dd></div>
+        <div><dt>Date</dt><dd>{when(record.occurredAt)}</dd></div>
       </dl>
       <button type="button" className="button" disabled={!record.transferId} onClick={() => record.transferId && onTransfer(record.transferId)}>
-        Ver todo este envío
+        See this whole transfer
       </button>
       <details>
-        <summary>Datos técnicos para soporte</summary>
+        <summary>Technical data for support</summary>
         <dl className="summary tech">
           {tech.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
         </dl>
@@ -227,5 +227,5 @@ function Detail({ record, onTransfer }: { record: AuditRecord; onTransfer: (id: 
 function when(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? ''
-    : new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(date);
+    : new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(date);
 }

@@ -3,23 +3,23 @@ import { expect, test, type Page } from '@playwright/test';
 // The customer and auditor journeys on the real stack: Gateway, Identity, Transfer saga, Wallet and Audit.
 
 async function signIn(page: Page, email: string) {
-  await page.goto('/ingresar');
-  await page.getByLabel('Correo').fill(email);
-  await page.getByLabel('Contraseña', { exact: true }).fill('Finova2026!');
-  await page.getByRole('button', { name: 'Ingresar' }).click();
+  await page.goto('/sign-in');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('Finova2026!');
+  await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
 async function send(page: Page, to: string, amount: string) {
-  await page.getByRole('button', { name: 'Enviar dinero' }).click();
-  await page.getByLabel('Correo de quien recibe').fill(to);
-  await page.getByLabel('Monto en pesos').fill(amount);
-  await page.getByLabel('Descripción (opcional)').fill('Prueba e2e');
-  await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.getByLabel('PIN de 4 dígitos').fill('4821');
-  await page.getByRole('button', { name: 'Confirmar y enviar' }).click();
+  await page.getByRole('button', { name: 'Send money' }).click();
+  await page.getByLabel('Recipient email').fill(to);
+  await page.getByLabel('Amount in pesos').fill(amount);
+  await page.getByLabel('Description (optional)').fill('Prueba e2e');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('4-digit PIN').fill('4821');
+  await page.getByRole('button', { name: 'Confirm and send' }).click();
 }
 
-const pesos = (text: string) => Number(text.replace(/[^\d,]/g, '').replace(',', '.'));
+const pesos = (text: string) => Number(text.replace(/[^\d.]/g, ''));
 
 let consoleErrors: string[] = [];
 
@@ -39,9 +39,9 @@ test('Ana sends money to Beto and her balance goes down by that amount', async (
 
   await send(page, 'beto@example.com', '1000');
 
-  await expect(page.getByText('Listo. Beto ya recibió el dinero.')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Done. Beto received the money.')).toBeVisible({ timeout: 60_000 });
   await expect.poll(async () => pesos(await balance.innerText())).toBe(before - 1000);
-  await expect(page.getByRole('button', { name: /Beto.*Completado/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Beto.*Completed/ })).toBeVisible();
 });
 
 test('a send larger than the balance is rejected without charging anything', async ({ page }) => {
@@ -52,30 +52,30 @@ test('a send larger than the balance is rejected without charging anything', asy
 
   await send(page, 'beto@example.com', '999999999');
 
-  await expect(page.getByText('No tienes saldo suficiente para este envío. No se descontó nada.')).toBeVisible({ timeout: 60_000 });
-  await page.getByRole('button', { name: 'Actualizar saldo' }).click();
+  await expect(page.getByText('You do not have enough balance for this transfer. Nothing was taken.')).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Refresh balance' }).click();
   await expect.poll(async () => pesos(await balance.innerText())).toBe(before);
 });
 
 test('the auditor follows a whole transfer and finds the record intact', async ({ page }) => {
   await signIn(page, 'auditor@example.com');
-  await expect(page).toHaveURL(/\/actividad$/);
+  await expect(page).toHaveURL(/\/activity$/);
 
-  await page.getByText('Ana no tenía saldo suficiente').first().click();
-  await page.getByRole('button', { name: 'Ver todo este envío' }).click();
-  await expect(page.getByText('3 movimientos')).toBeVisible();
-  await expect(page.locator('.audit-row')).toHaveText([/Ana pidió enviar dinero/, /Ana no tenía saldo suficiente/, /Envío rechazado/]);
+  await page.getByText('Ana did not have enough balance').first().click();
+  await page.getByRole('button', { name: 'See this whole transfer' }).click();
+  await expect(page.getByText('3 records')).toBeVisible();
+  await expect(page.locator('.audit-row')).toHaveText([/Ana asked to send money/, /Ana did not have enough balance/, /Transfer rejected/]);
 
-  await page.getByRole('button', { name: 'Revisar ahora' }).click();
-  await expect(page.getByRole('status')).toContainText('Todo en orden.');
+  await page.getByRole('button', { name: 'Check now' }).click();
+  await expect(page.getByRole('status')).toContainText('All good.');
 });
 
-test('a signed-out visitor is sent to sign in and a customer cannot open Actividad', async ({ page }) => {
-  await page.goto('/actividad');
-  await expect(page).toHaveURL(/\/ingresar$/);
+test('a signed-out visitor is sent to sign in and a customer cannot open Activity', async ({ page }) => {
+  await page.goto('/activity');
+  await expect(page).toHaveURL(/\/sign-in$/);
   await signIn(page, 'beto@example.com');
-  await expect(page).toHaveURL(/\/billetera$/);
-  await page.goto('/actividad');
-  await expect(page).toHaveURL(/\/billetera$/);
-  await expect(page.getByRole('navigation', { name: 'Secciones' })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/wallet$/);
+  await page.goto('/activity');
+  await expect(page).toHaveURL(/\/wallet$/);
+  await expect(page.getByRole('navigation', { name: 'Sections' })).toHaveCount(0);
 });

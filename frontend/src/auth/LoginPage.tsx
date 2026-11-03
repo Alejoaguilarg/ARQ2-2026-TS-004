@@ -54,23 +54,23 @@ export function LoginPage({ celebrateMs = 900 }: { celebrateMs?: number }) {
   }
 
   const covering = focus === 'password' && mood === 'idle';
-  const heading = mood === 'ok' ? (greeting ? `¡Hola, ${greeting}!` : '¡Hola!')
-    : covering && !showPassword ? 'No estoy mirando'
-      : covering ? 'Bueno… solo un poquito' : 'Hola de nuevo';
-  const subheading = mood === 'ok' ? 'Todo listo. Entrando a tu cuenta…'
-    : covering && !showPassword ? 'Tu contraseña es solo tuya.'
-      : covering ? 'Estás mostrando la contraseña.' : 'Ingresa para ver tu billetera.';
+  const heading = mood === 'ok' ? (greeting ? `Hi, ${greeting}!` : 'Hi!')
+    : covering && !showPassword ? 'I am not looking'
+      : covering ? 'Well… just a peek' : 'Welcome back';
+  const subheading = mood === 'ok' ? 'All set. Opening your account…'
+    : covering && !showPassword ? 'Your password is yours alone.'
+      : covering ? 'You are showing your password.' : 'Sign in to see your wallet.';
 
   return (
     <div className="page login">
       <section className="login-hero">
         <Brand />
-        <h1>Tu dinero se mueve rápido. <span>Nunca dos veces.</span></h1>
-        <p>Envía pesos a quien quieras en segundos. Confirmas cada envío con tu PIN y, si algo falla en el camino, tu dinero vuelve solo.</p>
+        <h1>Your money moves fast. <span>Never twice.</span></h1>
+        <p>Send pesos to anyone in seconds. You confirm every transfer with your PIN and, if something fails on the way, your money comes back on its own.</p>
         <ul className="pills">
-          <li className="glass-pill"><strong>Al instante</strong> entre cuentas Finova</li>
-          <li className="glass-pill"><strong>Con tu PIN</strong> confirmas cada envío</li>
-          <li className="glass-pill"><strong>Sin cobros dobles</strong> aunque se caiga la conexión</li>
+          <li className="glass-pill"><strong>Instant</strong> between Finova accounts</li>
+          <li className="glass-pill"><strong>With your PIN</strong> you confirm every transfer</li>
+          <li className="glass-pill"><strong>No double charges</strong> even if the connection drops</li>
         </ul>
       </section>
 
@@ -92,19 +92,19 @@ export function LoginPage({ celebrateMs = 900 }: { celebrateMs?: number }) {
 
           <form onSubmit={submit} className="stack" noValidate>
             <label className="field">
-              Correo
-              <input type="email" autoComplete="username" placeholder="tu@correo.com" value={email} required
+              Email
+              <input type="email" autoComplete="username" placeholder="you@email.com" value={email} required
                 onChange={(e) => typing(setEmail)(e.target.value)} onFocus={() => setFocus('email')}
                 onBlur={() => setFocus('none')} disabled={mood === 'ok'} />
             </label>
             <div className="field">
-              <label htmlFor="sign-in-password">Contraseña</label>
+              <label htmlFor="sign-in-password">Password</label>
               <span className="with-action">
                 <input id="sign-in-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} required
                   onChange={(e) => typing(setPassword)(e.target.value)} onFocus={() => setFocus('password')}
                   onBlur={() => setFocus('none')} disabled={mood === 'ok'} />
                 <button type="button" className="icon-button" aria-pressed={showPassword}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { setShowPassword(!showPassword); setFocus('password'); }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -116,12 +116,12 @@ export function LoginPage({ celebrateMs = 900 }: { celebrateMs?: number }) {
               </span>
             </div>
             <button type="submit" className="button primary" disabled={busy || !email || !password}>
-              {mood === 'ok' ? 'Entrando…' : busy ? 'Verificando…' : 'Ingresar'}
+              {mood === 'ok' ? 'Opening…' : busy ? 'Checking…' : 'Sign in'}
             </button>
           </form>
 
           <div className="examples">
-            <span>Prueba con una cuenta de ejemplo</span>
+            <span>Try an example account</span>
             <div>
               {EXAMPLES.map((example) => (
                 <button key={example.email} type="button" className="chip" disabled={busy}

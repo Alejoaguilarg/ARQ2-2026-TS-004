@@ -17,14 +17,14 @@ describe('friendly', () => {
   });
 
   it('says how long to wait when the Gateway says it', () => {
-    expect(friendly(error('RATE_LIMIT_EXCEEDED', { retryAfterSeconds: 42 })).text).toContain('42 segundos');
-    expect(friendly(error('RATE_LIMIT_EXCEEDED')).text).toBe('Espera un momento y vuelve a intentarlo.');
+    expect(friendly(error('RATE_LIMIT_EXCEEDED', { retryAfterSeconds: 42 })).text).toContain('42 seconds');
+    expect(friendly(error('RATE_LIMIT_EXCEEDED')).text).toBe('Wait a moment and try again.');
   });
 
   it('an unexpected error carries a short support reference', () => {
     expect(friendly(error('INTERNAL_ERROR', { correlationId: '5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e11' })).text)
       .toContain('FN-5D0F3F0E');
-    expect(friendly(error('SOMETHING_NEW')).text).toBe('Si vuelve a pasar, escríbenos.');
+    expect(friendly(error('SOMETHING_NEW')).text).toBe('If it happens again, write to us.');
     expect(supportReference({})).toBeUndefined();
   });
 });

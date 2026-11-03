@@ -77,7 +77,7 @@ export function toAmount(typed: string): string | null {
   return /^0\.00$/.test(amount) ? null : amount;
 }
 
-const money = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const formatMoney = (amount: string) => money.format(Number(amount));
 
@@ -135,37 +135,37 @@ export interface Progress {
 }
 
 const NOT_CREDITED: Record<string, string> = {
-  CREDIT_TIMEOUT: 'No pudimos completar el abono a tiempo.',
-  RECIPIENT_WALLET_NOT_FOUND: 'Esa persona aún no tiene billetera Finova.',
+  CREDIT_TIMEOUT: 'We could not complete the credit in time.',
+  RECIPIENT_WALLET_NOT_FOUND: 'That person does not have a Finova wallet yet.',
 };
 
 export function progress(status: TransferStatus, reason: string | null | undefined, to: string): Progress {
-  const received: Step = { label: 'Solicitud recibida', detail: 'Recibimos tu envío', kind: 'done' };
+  const received: Step = { label: 'Request received', detail: 'We received your transfer', kind: 'done' };
   switch (status) {
     case 'REJECTED':
       return {
-        badge: 'Rechazado', tone: 'bad',
+        badge: 'Rejected', tone: 'bad',
         headline: reason === 'INSUFFICIENT_FUNDS'
-          ? 'No tienes saldo suficiente para este envío. No se descontó nada.'
-          : 'No pudimos hacer este envío. No se descontó nada de tu cuenta.',
+          ? 'You do not have enough balance for this transfer. Nothing was taken.'
+          : 'We could not make this transfer. Nothing was taken from your account.',
         steps: [received, {
-          label: reason === 'INSUFFICIENT_FUNDS' ? 'Saldo insuficiente' : 'Envío no realizado',
-          detail: 'No se descontó nada de tu cuenta', kind: 'fail',
+          label: reason === 'INSUFFICIENT_FUNDS' ? 'Insufficient balance' : 'Transfer not made',
+          detail: 'Nothing was taken from your account', kind: 'fail',
         }],
       };
     case 'COMPENSATING':
     case 'REVERSED': {
       const back = status === 'REVERSED';
       return {
-        badge: back ? 'Devuelto' : 'Devolviendo', tone: 'warn',
+        badge: back ? 'Returned' : 'Returning', tone: 'warn',
         headline: back
-          ? 'No se pudo completar. Tu dinero ya está de vuelta en tu billetera.'
-          : 'No pudimos abonar al destinatario. Estamos devolviendo tu dinero.',
+          ? 'It could not be completed. Your money is back in your wallet.'
+          : 'We could not credit the recipient. We are returning your money.',
         steps: [
           received,
-          { label: 'Descuento de tu billetera', detail: 'Aplicado', kind: 'done' },
-          { label: 'Abono al destinatario', detail: NOT_CREDITED[reason ?? ''] ?? 'No se pudo completar', kind: 'fail' },
-          { label: 'Devolución a tu billetera', detail: back ? 'El dinero ya está de vuelta' : 'Devolviendo el dinero…', kind: back ? 'back' : 'active' },
+          { label: 'Debit from your wallet', detail: 'Applied', kind: 'done' },
+          { label: 'Credit to the recipient', detail: NOT_CREDITED[reason ?? ''] ?? 'It could not be completed', kind: 'fail' },
+          { label: 'Refund to your wallet', detail: back ? 'The money is back' : 'Returning the money…', kind: back ? 'back' : 'active' },
         ],
       };
     }
@@ -173,14 +173,14 @@ export function progress(status: TransferStatus, reason: string | null | undefin
       const pending = status === 'PENDING';
       const done = status === 'COMPLETED';
       return {
-        badge: done ? 'Completado' : 'En proceso', tone: done ? 'ok' : 'info',
-        headline: done ? `Listo. ${to} ya recibió el dinero.`
-          : pending ? 'Recibimos tu envío. Estamos verificando tus fondos.'
-            : 'Ya descontamos el dinero. Lo estamos abonando al destinatario.',
+        badge: done ? 'Completed' : 'In progress', tone: done ? 'ok' : 'info',
+        headline: done ? `Done. ${to} received the money.`
+          : pending ? 'We received your transfer. We are checking your funds.'
+            : 'We took the money. We are crediting it to the recipient.',
         steps: [
           received,
-          { label: 'Descuento de tu billetera', detail: pending ? 'Verificando fondos…' : 'Aplicado', kind: pending ? 'active' : 'done' },
-          { label: 'Abono al destinatario', detail: done ? 'Recibido' : 'Pendiente', kind: done ? 'done' : pending ? 'todo' : 'active' },
+          { label: 'Debit from your wallet', detail: pending ? 'Checking funds…' : 'Applied', kind: pending ? 'active' : 'done' },
+          { label: 'Credit to the recipient', detail: done ? 'Received' : 'Pending', kind: done ? 'done' : pending ? 'todo' : 'active' },
         ],
       };
     }

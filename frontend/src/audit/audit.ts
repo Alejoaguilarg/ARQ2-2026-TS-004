@@ -63,9 +63,9 @@ export const CUSTOMERS = [
 
 export function customer(userId: string | null): string {
   if (!userId) {
-    return 'Sin sesión';
+    return 'No session';
   }
-  return CUSTOMERS.find((c) => c.id === userId)?.name ?? `Cliente ${userId.slice(0, 8)}`;
+  return CUSTOMERS.find((c) => c.id === userId)?.name ?? `Customer ${userId.slice(0, 8)}`;
 }
 
 export type Tone = 'ok' | 'info' | 'warn' | 'bad' | 'plain';
@@ -78,77 +78,77 @@ export interface Reading {
 }
 
 const BADGES: Record<AuditRecord['outcome'], [string, Tone]> = {
-  ACCEPTED: ['Recibido', 'info'],
-  APPLIED: ['Aplicado', 'ok'],
-  COMPLETED: ['Completado', 'ok'],
-  DUPLICATE: ['Repetido', 'plain'],
-  REJECTED: ['Bloqueado', 'bad'],
-  FAILED: ['Falló', 'bad'],
-  COMPENSATED: ['Devuelto', 'warn'],
+  ACCEPTED: ['Received', 'info'],
+  APPLIED: ['Applied', 'ok'],
+  COMPLETED: ['Completed', 'ok'],
+  DUPLICATE: ['Repeated', 'plain'],
+  REJECTED: ['Blocked', 'bad'],
+  FAILED: ['Failed', 'bad'],
+  COMPENSATED: ['Returned', 'warn'],
 };
 
 const BLOCKED: Record<string, string> = {
-  FINANCIAL_SESSION_EXPIRED: 'la confirmación con PIN venció',
-  FINANCIAL_SESSION_USED: 'la confirmación con PIN ya se había usado',
-  FINANCIAL_SESSION_INVALID: 'la confirmación con PIN no era válida',
-  FINANCIAL_SESSION_REQUIRED: 'faltó la confirmación con PIN',
-  UNAUTHORIZED: 'la sesión no era válida',
-  TOKEN_REVOKED: 'la sesión ya estaba cerrada',
-  RATE_LIMIT_EXCEEDED: 'demasiados intentos seguidos',
-  MISSING_KEY: 'la app no identificó el envío',
-  KEY_REUSED: 'se repitió un envío con datos distintos',
-  IDEMPOTENCY_KEY_REUSED: 'se repitió un envío con datos distintos',
-  SECURITY_STORE_UNAVAILABLE: 'el sistema de seguridad no estaba disponible',
-  IDEMPOTENCY_STORE_UNAVAILABLE: 'el sistema de seguridad no estaba disponible',
-  SELF_TRANSFER_NOT_ALLOWED: 'intentó enviarse dinero a sí mismo',
-  VALIDATION_ERROR: 'los datos del envío no eran válidos',
+  FINANCIAL_SESSION_EXPIRED: 'the PIN confirmation expired',
+  FINANCIAL_SESSION_USED: 'the PIN confirmation was already used',
+  FINANCIAL_SESSION_INVALID: 'the PIN confirmation was not valid',
+  FINANCIAL_SESSION_REQUIRED: 'the PIN confirmation was missing',
+  UNAUTHORIZED: 'the session was not valid',
+  TOKEN_REVOKED: 'the session was already closed',
+  RATE_LIMIT_EXCEEDED: 'too many attempts in a row',
+  MISSING_KEY: 'the app did not identify the transfer',
+  KEY_REUSED: 'a transfer was repeated with different data',
+  IDEMPOTENCY_KEY_REUSED: 'a transfer was repeated with different data',
+  SECURITY_STORE_UNAVAILABLE: 'the security system was not available',
+  IDEMPOTENCY_STORE_UNAVAILABLE: 'the security system was not available',
+  SELF_TRANSFER_NOT_ALLOWED: 'tried to send money to themselves',
+  VALIDATION_ERROR: 'the transfer data was not valid',
 };
 
 export function read(r: AuditRecord): Reading {
-  const [shown, tone] = BADGES[r.outcome] ?? ['Registrado', 'plain'];
+  const [shown, tone] = BADGES[r.outcome] ?? ['Recorded', 'plain'];
   // Only the Gateway blocks; a no from Transfer or Wallet is a rejection.
-  const badge = r.outcome === 'REJECTED' && r.source !== 'GATEWAY' ? 'Rechazado' : shown;
+  const badge = r.outcome === 'REJECTED' && r.source !== 'GATEWAY' ? 'Rejected' : shown;
   const who = customer(r.userId);
   const say = (what: string, explain: string): Reading => ({ what, explain, badge, tone });
   const key = `${r.source} ${r.stage} ${r.outcome}`;
 
   switch (key) {
     case 'TRANSFER REQUEST ACCEPTED':
-      return say(`${who} pidió enviar dinero`, 'La solicitud llegó bien y quedó en proceso.');
+      return say(`${who} asked to send money`, 'The request arrived and is in progress.');
     case 'GATEWAY REQUEST DUPLICATE':
     case 'TRANSFER REQUEST DUPLICATE':
-      return say(`${who} tocó enviar otra vez`, 'Era el mismo envío repetido, así que no se cobró de nuevo.');
+      return say(`${who} tapped send again`, 'It was the same transfer repeated, so it was not charged again.');
     case 'GATEWAY REQUEST REJECTED':
     case 'TRANSFER REQUEST REJECTED':
-      return say(`Envío bloqueado: ${BLOCKED[r.reason ?? ''] ?? 'no cumplió las reglas'}`, 'No se movió dinero.');
+      return say(`Transfer blocked: ${BLOCKED[r.reason ?? ''] ?? 'it broke the rules'}`, 'No money moved.');
     case 'GATEWAY REQUEST FAILED':
-      return say('El servicio de envíos no respondió', 'La solicitud no se pudo atender. Si se reintenta, no se cobra dos veces.');
+      return say('The transfer service did not answer', 'The request could not be served. A retry is never charged twice.');
     case 'WALLET DEBIT APPLIED':
-      return say(`Se descontó el dinero de la cuenta de ${who}`, `El saldo de ${who} bajó por el valor del envío.`);
+      return say(`The money was taken from ${who}'s account`, `${who}'s balance went down by the transfer amount.`);
     case 'WALLET DEBIT REJECTED':
       return r.reason === 'INSUFFICIENT_FUNDS'
-        ? say(`${who} no tenía saldo suficiente`, 'No se descontó nada.')
-        : say(`${who} no tiene billetera`, 'No se descontó nada.');
+        ? say(`${who} did not have enough balance`, 'Nothing was taken.')
+        : say(`${who} has no wallet`, 'Nothing was taken.');
     case 'WALLET CREDIT APPLIED':
-      return say(`${who} recibió el dinero`, `El saldo de ${who} subió por el valor del envío.`);
+      return say(`${who} received the money`, `${who}'s balance went up by the transfer amount.`);
     case 'WALLET CREDIT FAILED':
       return r.reason === 'TRANSFER_REVERSED'
-        ? say('Abono tardío descartado', 'El envío ya se había devuelto, así que no se abonó.')
-        : say('El destinatario no tiene billetera', 'No se pudo abonar; el dinero se devuelve a quien envió.');
+        ? say('Late credit discarded', 'The transfer had already been returned, so it was not credited.')
+        : say('The recipient has no wallet', 'It could not be credited; the money goes back to the sender.');
     case 'TRANSFER CREDIT FAILED':
-      return say('El abono no respondió a tiempo', 'Se reintenta hasta 3 veces; si no responde, se devuelve el dinero.');
+      return say('The credit did not answer in time', 'It is retried up to 3 times; if it never answers, the money is returned.');
     case 'WALLET REVERSAL APPLIED':
-      return say(`Se le devolvió el dinero a ${who}`, `El saldo de ${who} volvió a quedar como antes del envío.`);
+      return say(`The money was returned to ${who}`, `${who}'s balance is back to what it was before the transfer.`);
     case 'WALLET REVERSAL REJECTED':
-      return say('Devolución no necesaria', 'El destinatario ya había recibido el dinero.');
+      return say('Refund not needed', 'The recipient had already received the money.');
     case 'TRANSFER TRANSFER COMPLETED':
-      return say('Envío completado', 'El envío terminó bien de principio a fin.');
+      return say('Transfer completed', 'The transfer went well from start to end.');
     case 'TRANSFER TRANSFER REJECTED':
-      return say('Envío rechazado', 'El envío terminó sin mover dinero.');
+      return say('Transfer rejected', 'The transfer ended without moving money.');
     case 'TRANSFER TRANSFER COMPENSATED':
-      return say('Envío devuelto', 'El envío no se completó y el dinero volvió a quien lo envió.');
+      return say('Transfer returned', 'The transfer did not complete and the money went back to the sender.');
     default:
-      return say('Movimiento registrado', 'Revisa los datos técnicos para más detalle.');
+      return say('Record stored', 'See the technical data for more detail.');
   }
 }
 

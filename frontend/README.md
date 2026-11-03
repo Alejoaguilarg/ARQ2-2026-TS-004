@@ -13,13 +13,13 @@ npm run build      # type check + production build in dist/
 
 ## Screens
 
-- `/ingresar`: sign-in with the robot that watches the email and covers its eyes for the password.
-- `/billetera`: balance, send by recipient email (`POST /users/lookup`), PIN (`POST /auth/financial-session`),
+- `/sign-in`: sign-in with the robot that watches the email and covers its eyes for the password.
+- `/wallet`: balance, send by recipient email (`POST /users/lookup`), PIN (`POST /auth/financial-session`),
   `POST /transfers` and live tracking (`GET /transfers/{id}`). A send keeps its `Idempotency-Key` and financial
   session until its data changes, so retrying after a lost answer never charges twice. Sends made from the browser
   are listed from `localStorage`; the backend has no "my transfers" endpoint.
-- `/actividad` (auditors only): the audit trail in plain words, a whole transfer at a time, and the hash-chain check.
-  The raw fields stay folded under "Datos técnicos para soporte".
+- `/activity` (auditors only): the audit trail in plain words, a whole transfer at a time, and the hash-chain check.
+  The raw fields stay folded under "Technical data for support".
 
 ## End-to-end (`e2e/`)
 

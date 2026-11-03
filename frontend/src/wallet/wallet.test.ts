@@ -20,22 +20,22 @@ describe('progress', () => {
     expect(progress('PENDING', null, 'Beto').steps.map((s) => s.kind)).toEqual(['done', 'active', 'todo']);
     expect(progress('DEBITED', null, 'Beto').steps.map((s) => s.kind)).toEqual(['done', 'done', 'active']);
     const done = progress('COMPLETED', null, 'Beto');
-    expect(done.headline).toBe('Listo. Beto ya recibió el dinero.');
+    expect(done.headline).toBe('Done. Beto received the money.');
     expect(done.tone).toBe('ok');
   });
 
   it('says nothing was charged when the funds were short', () => {
     const p = progress('REJECTED', 'INSUFFICIENT_FUNDS', 'Beto');
-    expect(p.badge).toBe('Rechazado');
-    expect(p.steps[1].label).toBe('Saldo insuficiente');
-    expect(progress('REJECTED', 'SENDER_WALLET_NOT_FOUND', 'Beto').steps[1].label).toBe('Envío no realizado');
+    expect(p.badge).toBe('Rejected');
+    expect(p.steps[1].label).toBe('Insufficient balance');
+    expect(progress('REJECTED', 'SENDER_WALLET_NOT_FOUND', 'Beto').steps[1].label).toBe('Transfer not made');
   });
 
   it('shows the money coming back after a failed credit', () => {
     expect(progress('COMPENSATING', 'CREDIT_TIMEOUT', 'Beto').steps[3].kind).toBe('active');
     const p = progress('REVERSED', 'RECIPIENT_WALLET_NOT_FOUND', 'Beto');
-    expect(p.badge).toBe('Devuelto');
-    expect(p.steps[2].detail).toBe('Esa persona aún no tiene billetera Finova.');
+    expect(p.badge).toBe('Returned');
+    expect(p.steps[2].detail).toBe('That person does not have a Finova wallet yet.');
     expect(p.steps[3].kind).toBe('back');
   });
 });
