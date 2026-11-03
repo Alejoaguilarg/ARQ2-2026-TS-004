@@ -6,6 +6,7 @@ import co.com.finova.gateway.usecase.idempotency.IdempotencyUseCase.Decision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import io.micrometer.core.instrument.Metrics;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,8 @@ import java.util.regex.Pattern;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
     public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 40;
+    // Retries answered from Redis without calling Transfer: the double charges this filter prevented (spec F3).
+    static final String REPLAYS = "finova.gateway.idempotent.replays";
 
     private static final System.Logger LOG = System.getLogger(IdempotencyFilter.class.getName());
     private static final Pattern UUID_PATTERN =
@@ -84,6 +87,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                 response.setStatus(replay.httpStatus());
                 response.setContentType("application/json");
                 response.setHeader("Idempotent-Replayed", "true");
+                Metrics.counter(REPLAYS).increment();
                 response.getOutputStream().write(replay.body().getBytes(StandardCharsets.UTF_8));
             }
         }

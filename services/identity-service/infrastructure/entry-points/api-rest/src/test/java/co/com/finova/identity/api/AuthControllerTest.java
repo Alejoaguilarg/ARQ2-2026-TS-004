@@ -7,6 +7,8 @@ import co.com.finova.identity.usecase.session.FinancialSessionUseCase;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.LogoutUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -15,6 +17,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -204,6 +207,35 @@ class AuthControllerTest {
             stepUp("Bearer at-1", body).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         }
         verifyNoInteractions(financialSessions);
+    }
+
+    @Test
+    void eachRejectionIsCountedAsASecurityEvent() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Metrics.addRegistry(registry);
+        try {
+            when(login.login(any(), any(), any())).thenReturn(new LoginUseCase.Result.InvalidCredentials(),
+                    new LoginUseCase.Result.InvalidCredentials(), new LoginUseCase.Result.Locked());
+            when(refresh.refresh(any(), any())).thenReturn(new RefreshSessionUseCase.Result.Reused());
+            when(financialSessions.open(any(), any(), any(), any())).thenReturn(new FinancialSessionUseCase.Result.StepUpFailed());
+
+            call("/auth/login", LOGIN);
+            call("/auth/login", LOGIN);
+            call("/auth/login", LOGIN);
+            call("/auth/refresh", REFRESH);
+            stepUp("Bearer at-1", "{\"method\":\"PIN\",\"credential\":\"0000\",\"scope\":\"transfer:create\"}");
+
+            assertThat(events(registry, "login_failed")).isEqualTo(2);
+            assertThat(events(registry, "account_locked")).isEqualTo(1);
+            assertThat(events(registry, "refresh_reused")).isEqualTo(1);
+            assertThat(events(registry, "step_up_failed")).isEqualTo(1);
+        } finally {
+            Metrics.removeRegistry(registry);
+        }
+    }
+
+    private static double events(SimpleMeterRegistry registry, String event) {
+        return registry.get(AuthController.SECURITY_EVENTS).tag("event", event).counter().count();
     }
 
     private ResultActions stepUp(String authorization, String body) throws Exception {
