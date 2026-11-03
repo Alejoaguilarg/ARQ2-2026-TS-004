@@ -8,18 +8,21 @@ spring:
   devtools:
     add-properties: false
 
+  # The service connects as audit_app, a login role with INSERT and SELECT only (inherited from audit_rw, V2).
+  # Flyway connects as the database owner, creates that role and grants it nothing more.
   datasource:
     url: "jdbc:postgresql://localhost:5432/audit_db"
-    username: "audit"
-    password: "audit"
-    hikari:
-      connection-init-sql: "SET ROLE audit_rw"
+    username: "audit_app"
+    password: "audit_app"
 
   flyway:
     enabled: true
     locations: "classpath:db/migration"
-    user: "${spring.datasource.username}"
-    password: "${spring.datasource.password}"
+    user: "audit"
+    password: "audit"
+    placeholders:
+      appUser: "${spring.datasource.username}"
+      appPassword: "${spring.datasource.password}"
 
   rabbitmq:
     host: "${RABBITMQ_HOST:localhost}"

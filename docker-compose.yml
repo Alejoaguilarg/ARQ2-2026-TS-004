@@ -133,8 +133,12 @@ services:
     environment:
       <<: *app-env
       SPRING_DATASOURCE_URL: jdbc:postgresql://audit-db:5432/audit_db
-      SPRING_DATASOURCE_USERNAME: ${AUDIT_DB_USER:-audit}
-      SPRING_DATASOURCE_PASSWORD: ${AUDIT_DB_PASSWORD:-audit}
+      # The service runs as a login role with INSERT and SELECT only; the owner (a superuser in the
+      # container) is used by Flyway alone, which creates that role (audit V2).
+      SPRING_DATASOURCE_USERNAME: ${AUDIT_DB_APP_USER:-audit_app}
+      SPRING_DATASOURCE_PASSWORD: ${AUDIT_DB_APP_PASSWORD:-audit_app}
+      SPRING_FLYWAY_USER: ${AUDIT_DB_USER:-audit}
+      SPRING_FLYWAY_PASSWORD: ${AUDIT_DB_PASSWORD:-audit}
     healthcheck: *app-healthcheck
     depends_on:
       audit-db: { condition: service_healthy }
