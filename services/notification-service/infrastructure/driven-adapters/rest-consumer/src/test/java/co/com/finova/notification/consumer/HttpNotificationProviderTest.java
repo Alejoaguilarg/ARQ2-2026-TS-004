@@ -34,13 +34,13 @@ class HttpNotificationProviderTest {
 
     @Test
     void postsTheNotificationToTheEndpointOfItsChannel() {
-        Notification notification = notification(Channel.EMAIL, "usuario.a@finova.test");
+        Notification notification = notification(Channel.EMAIL, "user.a@finova.test");
 
         server.expect(requestTo("http://provider/email"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Idempotency-Key", notification.notificationId().toString()))
                 .andExpect(header("X-Correlation-Id", "corr-1"))
-                .andExpect(jsonPath("$.to").value("usuario.a@finova.test"))
+                .andExpect(jsonPath("$.to").value("user.a@finova.test"))
                 .andExpect(jsonPath("$.eventType").value("TransferCompleted"))
                 .andExpect(jsonPath("$.amount").value("150000.00"))
                 .andRespond(withStatus(HttpStatus.ACCEPTED));
@@ -56,7 +56,7 @@ class HttpNotificationProviderTest {
         server.expect(requestTo("http://provider/push")).andRespond(withStatus(HttpStatus.ACCEPTED));
 
         provider.send(notification(Channel.SMS, "+573000000003"));
-        provider.send(notification(Channel.PUSH, "push-token-usuario-d"));
+        provider.send(notification(Channel.PUSH, "push-token-user-d"));
 
         server.verify();
     }
@@ -65,12 +65,12 @@ class HttpNotificationProviderTest {
     void anErrorAnswerIsADeliveryFailure() {
         server.expect(requestTo("http://provider/email")).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
 
-        assertThatThrownBy(() -> provider.send(notification(Channel.EMAIL, "falla@finova.test")))
+        assertThatThrownBy(() -> provider.send(notification(Channel.EMAIL, "fail@finova.test")))
                 .isInstanceOf(NotificationDeliveryException.class);
     }
 
     private static Notification notification(Channel channel, String to) {
         return new Notification(UUID.randomUUID(), channel, to, TransferEventType.TRANSFER_COMPLETED,
-                UUID.randomUUID(), "150000.00", "COP", null, "Asunto", "Mensaje", "corr-1");
+                UUID.randomUUID(), "150000.00", "COP", null, "Subject", "Message", "corr-1");
     }
 }

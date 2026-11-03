@@ -32,9 +32,9 @@ class SmtpEmailProviderTest {
         ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(sent.capture());
         assertThat(sent.getValue().getFrom()).isEqualTo("finova.pruebas@gmail.com");
-        assertThat(sent.getValue().getTo()).containsExactly("usuario.a@finova.test");
-        assertThat(sent.getValue().getSubject()).isEqualTo("Finova: transferencia enviada");
-        assertThat(sent.getValue().getText()).startsWith("Enviaste 150000.00 COP");
+        assertThat(sent.getValue().getTo()).containsExactly("user.a@finova.test");
+        assertThat(sent.getValue().getSubject()).isEqualTo("Finova: transfer sent");
+        assertThat(sent.getValue().getText()).startsWith("You sent 150000.00 COP");
     }
 
     @Test
@@ -51,9 +51,9 @@ class SmtpEmailProviderTest {
     }
 
     private static Notification notification(Channel channel) {
-        return new Notification(UUID.randomUUID(), channel, "usuario.a@finova.test",
+        return new Notification(UUID.randomUUID(), channel, "user.a@finova.test",
                 TransferEventType.TRANSFER_COMPLETED, UUID.randomUUID(), "150000.00", "COP", null,
-                "Finova: transferencia enviada", "Enviaste 150000.00 COP. La transferencia se completó con éxito.",
+                "Finova: transfer sent", "You sent 150000.00 COP. The transfer was completed.",
                 "corr-1");
     }
 }

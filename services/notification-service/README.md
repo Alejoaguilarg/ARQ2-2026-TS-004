@@ -56,7 +56,7 @@ A message moved to the DLQ carries the header `x-notification-error` with the ca
 
 Requirements: JDK 21, Docker Desktop and a branch with the team's `docker-compose.yml`.
 
-**1. Database and provider mock.** At the repo root, create a `docker-compose.override.yml` (not committed: add it to `.git/info/exclude`):
+**1. Database, broker and provider mock.** At the repo root, create a `docker-compose.override.yml` (not committed: add it to `.git/info/exclude`):
 
 ```yaml
 services:
@@ -66,15 +66,20 @@ services:
   notification-provider-mock:
     ports:
       - "127.0.0.1:8089:8080"
+  rabbitmq:
+    ports:
+      - "127.0.0.1:5672:5672"
 ```
 
-Then start them:
+Then start them, with the compose's own RabbitMQ (its console is already on http://localhost:15672):
 
 ```
-docker compose up -d notification-db notification-provider-mock
+docker compose up -d notification-db notification-provider-mock rabbitmq rabbitmq-init
 ```
 
-**2. Environment variables in IntelliJ** (Run → Edit Configurations → run configuration of `MainApplication` → Environment variables), to use the CloudAMQP broker:
+**2. Broker.** The local RabbitMQ needs only its user: `SPRING_RABBITMQ_USERNAME=finova` and `SPRING_RABBITMQ_PASSWORD=finova` (or the values in your `.env`). The deliverable runs on that local broker.
+
+*Optional, CloudAMQP instead:* set these in IntelliJ (Run → Edit Configurations → `MainApplication` → Environment variables):
 
 ```
 SPRING_RABBITMQ_HOST=<CloudAMQP host>
@@ -137,8 +142,8 @@ If `R__seed_recipient_contacts.sql` changes, Flyway runs it again and restores t
 | `transfer-rejected.json` | Only Ana is notified, with the reason |
 | `transfer-reversed.json` | Only Ana is notified: the money was returned |
 | `transfer-completed-sms-push.json` | SMS and PUSH channels (provider mock) |
-| `transfer-completed-falla.json` | Ana ends `SENT`. The "falla" user gets 503 from the mock (`infra/notification-provider-mock/mappings/notifications-falla.json`), is retried every 5 s and ends in `notification.transfer-events.q.dlq` with `attempts = 4` |
-| `mensaje-invalido.txt` | A body that is not JSON: straight to the DLQ |
+| `transfer-completed-fail.json` | Ana ends `SENT`. The "fail" user gets 503 from the mock (`infra/notification-provider-mock/mappings/notifications-fail.json`), is retried every 5 s and ends in `notification.transfer-events.q.dlq` with `attempts = 4` |
+| `invalid-message.txt` | A body that is not JSON: straight to the DLQ |
 
 To see the result:
 

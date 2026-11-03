@@ -18,20 +18,20 @@ class NotificationMessagesTest {
     void completedTransferHasDifferentTextForSenderAndRecipient() {
         TransferOutcome outcome = outcome(TransferEventType.TRANSFER_COMPLETED, null);
 
-        assertThat(NotificationMessages.body(outcome, SENDER)).startsWith("Enviaste 150000.00 COP");
-        assertThat(NotificationMessages.body(outcome, RECIPIENT)).startsWith("Recibiste 150000.00 COP");
-        assertThat(NotificationMessages.subject(outcome, SENDER)).isEqualTo("Finova: transferencia enviada");
-        assertThat(NotificationMessages.subject(outcome, RECIPIENT)).isEqualTo("Finova: recibiste una transferencia");
+        assertThat(NotificationMessages.body(outcome, SENDER)).startsWith("You sent 150000.00 COP");
+        assertThat(NotificationMessages.body(outcome, RECIPIENT)).startsWith("You received 150000.00 COP");
+        assertThat(NotificationMessages.subject(outcome, SENDER)).isEqualTo("Finova: transfer sent");
+        assertThat(NotificationMessages.subject(outcome, RECIPIENT)).isEqualTo("Finova: you received a transfer");
     }
 
     @Test
     void rejectedTransferExplainsTheReason() {
         TransferOutcome outcome = outcome(TransferEventType.TRANSFER_REJECTED, "INSUFFICIENT_FUNDS");
 
-        assertThat(NotificationMessages.subject(outcome, SENDER)).isEqualTo("Finova: transferencia rechazada");
+        assertThat(NotificationMessages.subject(outcome, SENDER)).isEqualTo("Finova: transfer rejected");
         assertThat(NotificationMessages.body(outcome, SENDER))
-                .contains("fue rechazada: fondos insuficientes")
-                .contains("No se descontó dinero")
+                .contains("was rejected: insufficient funds")
+                .contains("No money was taken")
                 .contains(TRANSFER.toString());
     }
 
@@ -39,17 +39,17 @@ class NotificationMessagesTest {
     void reversedTransferSaysTheMoneyWasReturned() {
         TransferOutcome outcome = outcome(TransferEventType.TRANSFER_REVERSED, "CREDIT_TIMEOUT");
 
-        assertThat(NotificationMessages.subject(outcome, SENDER)).isEqualTo("Finova: transferencia reversada");
-        assertThat(NotificationMessages.body(outcome, SENDER)).contains("El dinero fue devuelto");
+        assertThat(NotificationMessages.subject(outcome, SENDER)).isEqualTo("Finova: transfer reversed");
+        assertThat(NotificationMessages.body(outcome, SENDER)).contains("The money was returned");
     }
 
     @ParameterizedTest
     @CsvSource({
-            "INSUFFICIENT_FUNDS, fondos insuficientes",
-            "SENDER_WALLET_NOT_FOUND, no se encontró tu billetera",
-            "RECIPIENT_WALLET_NOT_FOUND, no se encontró la billetera del destinatario",
-            "CREDIT_TIMEOUT, el destinatario no pudo recibir el dinero a tiempo",
-            "SOMETHING_NEW, motivo no especificado"
+            "INSUFFICIENT_FUNDS, insufficient funds",
+            "SENDER_WALLET_NOT_FOUND, your wallet was not found",
+            "RECIPIENT_WALLET_NOT_FOUND, the recipient has no Finova wallet",
+            "CREDIT_TIMEOUT, the recipient could not receive the money in time",
+            "SOMETHING_NEW, unspecified reason"
     })
     void describesEveryReasonOfTheSpec(String reason, String text) {
         assertThat(NotificationMessages.describe(reason)).isEqualTo(text);
@@ -57,7 +57,7 @@ class NotificationMessagesTest {
 
     @Test
     void missingReasonHasAGenericText() {
-        assertThat(NotificationMessages.describe(null)).isEqualTo("motivo no especificado");
+        assertThat(NotificationMessages.describe(null)).isEqualTo("unspecified reason");
     }
 
     private static TransferOutcome outcome(TransferEventType type, String reason) {
