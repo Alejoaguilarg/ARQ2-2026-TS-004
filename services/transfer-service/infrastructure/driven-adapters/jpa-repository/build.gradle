@@ -1,10 +1,14 @@
 dependencies {
     implementation project(':model')
-
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.reactivecommons.utils:object-mapper-api:0.1.0'
+    // JSON of outbox payloads (JSONB) comes from the shared contract mapper.
+    implementation project(':message-json')
+    // JdbcClient over transfer_db, as in Wallet and Audit: plain SQL, no JPA entities.
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
 
     runtimeOnly 'org.postgresql:postgresql'
-    runtimeOnly 'com.h2database:h2' // TODO: remove this to use real database
-    testImplementation 'org.reactivecommons.utils:object-mapper:0.1.0'
+
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }

@@ -1,17 +1,34 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
-    implementation project(':rabbitmq-publisher')
-    implementation project(':redis')
-    implementation project(':jpa-repository')
+	implementation project(':message-json')
+	implementation project(':rabbitmq-publisher')
+	implementation project(':jpa-repository')
+	testImplementation 'org.springframework:spring-web'
+	testImplementation 'org.springframework:spring-jdbc'
+	implementation project(':api-rest')
     implementation project(':model')
     implementation project(':usecase')
     implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    implementation 'org.flywaydb:flyway-core'
-    implementation 'org.reactivecommons.utils:object-mapper:0.1.0'
-    runtimeOnly('org.springframework.boot:spring-boot-devtools')
-    testImplementation 'org.springframework:spring-web'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'com.tngtech.archunit:archunit:1.3.0'
     testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+}
+
+tasks.register('explodedJar', Copy) {
+    with jar
+    into layout.buildDirectory.dir("exploded")
+}
+
+jar {
+    // To disable the *-plain.jar
+    enabled = false
+}
+
+bootJar {
+    // Sets output jar name
+    archiveFileName = "${project.getParent().getName()}.${archiveExtension.get()}"
 }
