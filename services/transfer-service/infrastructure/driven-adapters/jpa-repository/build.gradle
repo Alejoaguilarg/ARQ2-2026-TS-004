@@ -9,6 +9,7 @@ dependencies {
 
     runtimeOnly 'org.postgresql:postgresql'
 
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
 }
