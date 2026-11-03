@@ -30,6 +30,10 @@ function Screens() {
   if (status === 'signed-out') {
     return <LoginPage />;
   }
+  if (target) {
+    // Redirect pending: rendering the old path would call its API first (a customer on /actividad would ask for audit data).
+    return null;
+  }
   return (
     <AppShell>
       {path === PATHS.activity ? (

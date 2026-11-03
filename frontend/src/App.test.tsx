@@ -39,7 +39,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App session={new Session()} />);
     expect(await screen.findByRole('heading', { name: 'Hola de nuevo' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/ingresar');
+    await waitFor(() => expect(window.location.pathname).toBe('/ingresar'));
 
     await signIn(user, 'ana@example.com', 'Finova2026!');
 
@@ -134,6 +134,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Saldo disponible' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/billetera');
     expect(screen.getByText('ana@example.com')).toBeInTheDocument();
+    expect(fetch.mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith('/api/audit'))).toEqual([]);
 
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
 
