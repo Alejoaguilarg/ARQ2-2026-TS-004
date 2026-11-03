@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AuditPage } from './audit/AuditPage';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import type { Session } from './auth/session';
@@ -32,7 +33,7 @@ function Screens() {
   return (
     <AppShell>
       {path === PATHS.activity ? (
-        <section className="glass placeholder"><h1>Actividad de envíos</h1></section>
+        <AuditPage />
       ) : (
         <WalletPage />
       )}
