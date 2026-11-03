@@ -6,7 +6,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "10s",
   "time": {
@@ -96,13 +96,119 @@
       "description": "1 = Prometheus can scrape /actuator/prometheus. Services not created yet show 0."
     },
     {
+      "id": 17,
+      "title": "Alerts",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "title": "Firing alerts",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "alertstate": true,
+              "job": true
+            },
+            "indexByName": {
+              "severity": 0,
+              "alertname": 1,
+              "instance": 2,
+              "queue": 3
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "description": "Rules in infra/observability/prometheus/alerts.yml (see docs/observability.md). Empty table = nothing firing. Full state: http://localhost:9090/alerts"
+    },
+    {
       "id": 3,
       "type": "row",
       "title": "HTTP",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 12,
         "w": 24,
         "h": 1
       },
@@ -118,7 +224,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 13,
         "w": 8,
         "h": 8
       },
@@ -151,7 +257,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 6,
+        "y": 13,
         "w": 8,
         "h": 8
       },
@@ -184,7 +290,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 6,
+        "y": 13,
         "w": 8,
         "h": 8
       },
@@ -209,13 +315,178 @@
       "description": "Needs percentile histograms, enabled through MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS in docker-compose.yml."
     },
     {
+      "id": 19,
+      "title": "Security",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 20,
+      "title": "Gateway rejections by code (per minute)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 10,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (code) (increase(finova_gateway_rejections_total[1m]))",
+          "legendFormat": "{{code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Every request the Gateway refused, by ErrorResponse code: TOKEN_REVOKED, RATE_LIMIT_EXCEEDED, ACCOUNT_LOCKED, FINANCIAL_SESSION_USED, UPSTREAM_UNAVAILABLE..."
+    },
+    {
+      "id": 21,
+      "title": "Identity security events (per minute)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 22,
+        "w": 10,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (event) (increase(finova_identity_security_events_total[1m]))",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Failed logins, locked accounts, reused refresh tokens and failed step-ups. Each one is also a WARN log line with its correlationId."
+    },
+    {
+      "id": 22,
+      "title": "Transfers replayed by idempotency",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 22,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(finova_gateway_idempotent_replays_total[$__range])) or vector(0)",
+          "legendFormat": "replayed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "Retries of POST /transfers answered from Redis without calling Transfer, in the selected time range: double charges prevented (spec F3)."
+    },
+    {
       "id": 7,
       "type": "row",
       "title": "JVM and database",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 30,
         "w": 24,
         "h": 1
       },
@@ -231,7 +502,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -264,7 +535,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 15,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -292,7 +563,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 39,
         "w": 24,
         "h": 1
       },
@@ -308,7 +579,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 40,
         "w": 8,
         "h": 8
       },
@@ -340,7 +611,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 24,
+        "y": 40,
         "w": 8,
         "h": 8
       },
@@ -360,7 +631,7 @@
         "overrides": []
       },
       "options": {},
-      "description": "Messages waiting the 5 s backoff before going back to their queue (spec.md \u00a74.2)."
+      "description": "Messages waiting the 5 s backoff before going back to their queue (spec.md §4.2)."
     },
     {
       "id": 13,
@@ -372,7 +643,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 24,
+        "y": 40,
         "w": 8,
         "h": 8
       },
@@ -413,7 +684,7 @@
         "graphMode": "none",
         "textMode": "value_and_name"
       },
-      "description": "Every message here exhausted its retries and needs manual review (spec.md \u00a74.2)."
+      "description": "Every message here exhausted its retries and needs manual review (spec.md §4.2)."
     },
     {
       "id": 14,
@@ -425,7 +696,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 48,
         "w": 24,
         "h": 6
       },
@@ -454,7 +725,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 54,
         "w": 24,
         "h": 1
       },
@@ -470,7 +741,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 55,
         "w": 24,
         "h": 10
       },

@@ -1,0 +1,8 @@
+dependencies {
+    implementation project(':model')
+    implementation project(':usecase')
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    // The body is read as a JSON tree, so that each contract field is checked by name (spec §4.1, §4.4).
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'io.micrometer:micrometer-core'
+}
