@@ -38,7 +38,9 @@ public class VerifyAuditChainUseCase {
         validate(fromSeq, toSeq);
         Optional<ChainLink> last = records.findLastLink();
         long from = fromSeq == null ? 1 : fromSeq;
-        long to = toSeq != null ? toSeq : last.map(ChainLink::seq).orElse(0L);
+        long lastSeq = last.map(ChainLink::seq).orElse(0L);
+        // A toSeq beyond the last record stops there: records that do not exist yet are not missing ones.
+        long to = toSeq != null ? Math.min(toSeq, lastSeq) : lastSeq;
         if (from > to) {
             return new ChainVerification(true, 0, null, clock.instant());
         }

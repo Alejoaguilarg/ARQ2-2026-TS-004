@@ -1,44 +1,44 @@
 package co.com.finova.audit.config;
 
+import co.com.finova.audit.model.common.gateways.TransactionRunner;
+import co.com.finova.audit.model.record.gateways.AuditRecordRepository;
+import co.com.finova.audit.usecase.queryrecords.QueryAuditRecordsUseCase;
+import co.com.finova.audit.usecase.recordattempt.RecordAttemptUseCase;
+import co.com.finova.audit.usecase.verifychain.VerifyAuditChainUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class UseCasesConfigTest {
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
+class UseCasesConfigTest {
 
     @Test
-    void testUseCaseBeansExist() {
-        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(TestConfig.class)) {
-            String[] beanNames = context.getBeanDefinitionNames();
-
-            boolean useCaseBeanFound = false;
-            for (String beanName : beanNames) {
-                if (beanName.endsWith("UseCase")) {
-                    useCaseBeanFound = true;
-                    break;
-                }
-            }
-
-            assertTrue(useCaseBeanFound, "No beans ending with 'Use Case' were found");
+    void registersEveryUseCase() {
+        try (var context = new AnnotationConfigApplicationContext(TestConfig.class)) {
+            assertThat(context.getBean(RecordAttemptUseCase.class)).isNotNull();
+            assertThat(context.getBean(QueryAuditRecordsUseCase.class)).isNotNull();
+            assertThat(context.getBean(VerifyAuditChainUseCase.class)).isNotNull();
         }
     }
 
+    // The ports the use cases need; the real adapters live in the infrastructure modules.
     @Configuration
-    @Import(UseCasesConfig.class)
+    @Import({UseCasesConfig.class, ClockConfig.class})
     static class TestConfig {
 
         @Bean
-        public MyUseCase myUseCase() {
-            return new MyUseCase();
+        AuditRecordRepository auditRecordRepository() {
+            return mock(AuditRecordRepository.class);
         }
-    }
 
-    static class MyUseCase {
-        public String execute() {
-            return "MyUseCase Test";
+        @Bean
+        TransactionRunner transactionRunner() {
+            return mock(TransactionRunner.class);
         }
     }
 }
