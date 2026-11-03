@@ -100,11 +100,6 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://wallet-db:5432/wallet_db
       SPRING_DATASOURCE_USERNAME: ${WALLET_DB_USER:-wallet}
       SPRING_DATASOURCE_PASSWORD: ${WALLET_DB_PASSWORD:-wallet}
-      # Temporary fix until x-app-env is corrected: Spring binds the name below to
-      # ...distribution.percentiles (double[]), so "true" stops the app at startup.
-      # The intended property is percentiles-histogram, whose env var name has no underscore there.
-      MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: ""
-      MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILESHISTOGRAM_HTTP_SERVER_REQUESTS: "true"
     healthcheck: *app-healthcheck
     depends_on:
       wallet-db: { condition: service_healthy }
