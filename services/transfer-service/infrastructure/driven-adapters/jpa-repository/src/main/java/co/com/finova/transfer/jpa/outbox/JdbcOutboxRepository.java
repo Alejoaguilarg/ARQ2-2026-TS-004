@@ -19,6 +19,8 @@ import java.util.UUID;
 @Repository
 public class JdbcOutboxRepository implements OutboxRepository, OutboxRelayRepository {
 
+    private static final int MAX_ERROR_LENGTH = 500;
+
     private final JdbcClient jdbc;
     private final MessageJsonMapper json;
 
@@ -47,10 +49,13 @@ public class JdbcOutboxRepository implements OutboxRepository, OutboxRelayReposi
      * holds the rows until the relay transaction ends and lets another instance take the next ones.
      * correlationId and transferId are read from the stored envelope; payload::text is published as it is.
      */
-    /** §4.6 rule 8: the same row, with the same messageId, goes back to pending. */
+    /**
+     * §4.6 rule 8: the same row, with the same messageId, goes back to pending, due now: a resend from the sweeper
+     * does not wait for an earlier publish failure's retry time.
+     */
     @Override
     public void republish(UUID id) {
-        int updated = jdbc.sql("UPDATE outbox_messages SET published_at = NULL WHERE id = :id")
+        int updated = jdbc.sql("UPDATE outbox_messages SET published_at = NULL, next_attempt_at = NULL WHERE id = :id")
                 .param("id", id)
                 .update();
         if (updated != 1) {
@@ -59,20 +64,42 @@ public class JdbcOutboxRepository implements OutboxRepository, OutboxRelayReposi
     }
 
     @Override
-    public List<PendingOutboxMessage> lockPending(int limit) {
+    public List<PendingOutboxMessage> lockPending(int limit, Instant now) {
         return jdbc.sql("""
-                        SELECT id, exchange, routing_key, payload::text AS json,
+                        SELECT id, exchange, routing_key, payload::text AS json, attempts,
                                payload->>'correlationId' AS correlation_id,
                                payload->>'transferId' AS transfer_id
                         FROM outbox_messages
                         WHERE published_at IS NULL
+                          AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
                         ORDER BY created_at
                         LIMIT :limit
                         FOR UPDATE SKIP LOCKED
                         """)
                 .param("limit", limit)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .query((rs, rowNum) -> toPending(rs))
                 .list();
+    }
+
+    /** last_error keeps the first 500 characters (VARCHAR(500) in V2). */
+    @Override
+    public void recordFailure(UUID id, int attempts, Instant nextAttemptAt, String error) {
+        String lastError = error == null || error.length() <= MAX_ERROR_LENGTH
+                ? error : error.substring(0, MAX_ERROR_LENGTH);
+        int updated = jdbc.sql("""
+                        UPDATE outbox_messages
+                        SET attempts = :attempts, next_attempt_at = :nextAttemptAt, last_error = :lastError
+                        WHERE id = :id
+                        """)
+                .param("attempts", attempts)
+                .param("nextAttemptAt", OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC))
+                .param("lastError", lastError)
+                .param("id", id)
+                .update();
+        if (updated != 1) {
+            throw new IllegalStateException("outbox row " + id + " not found");
+        }
     }
 
     @Override
@@ -94,6 +121,7 @@ public class JdbcOutboxRepository implements OutboxRepository, OutboxRelayReposi
                 transferId == null ? null : UUID.fromString(transferId),
                 rs.getString("exchange"),
                 rs.getString("routing_key"),
-                rs.getString("json"));
+                rs.getString("json"),
+                rs.getInt("attempts"));
     }
 }

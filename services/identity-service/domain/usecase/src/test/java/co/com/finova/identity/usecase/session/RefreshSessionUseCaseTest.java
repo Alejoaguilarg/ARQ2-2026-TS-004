@@ -129,6 +129,21 @@ class RefreshSessionUseCaseTest {
 
         assertThat(useCase.refresh(TOKEN, "ios-1")).isInstanceOf(Result.Invalid.class);
         assertThat(refreshTokens.byValue(TOKEN).status()).isEqualTo(RefreshToken.Status.REVOKED);
+        verify(revocations).revokeSession(FAMILY.toString(), RevocationStore.SESSION_TTL);
+    }
+
+    @Test
+    void aTokenSavedAfterItsSessionWasRevokedCannotReviveIt() {
+        // A refresh rotated the old token, then a logout revoked the family, then the refresh saved its new token.
+        refreshTokens.save(new RefreshToken(SessionTokens.hash("rt_old"), FAMILY, ANA, "ios-1",
+                RefreshToken.Status.REVOKED, Instant.now().plusSeconds(60)));
+        stored(RefreshToken.Status.ACTIVE, "ios-1", Instant.now().plusSeconds(60));
+
+        assertThat(useCase.refresh(TOKEN, "ios-1")).isInstanceOf(Result.Invalid.class);
+
+        assertThat(refreshTokens.byValue(TOKEN).status()).isEqualTo(RefreshToken.Status.REVOKED);
+        verify(revocations).revokeSession(FAMILY.toString(), RevocationStore.SESSION_TTL);
+        verify(signer, never()).signAccessToken(any(), any(), any(), any());
     }
 
     @Test

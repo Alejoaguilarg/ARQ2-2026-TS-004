@@ -25,6 +25,10 @@ finova:
   security:
     # iss of every token Identity signs; the Gateway checks the same value (JWT_ISSUER there).
     issuer: ${JWT_ISSUER:finova-identity}
+    # PEM file with the RSA key that signs every token, created on first start when missing. In docker-compose it
+    # lives in the identity-keys volume, so a restart keeps issued tokens valid. Empty: a key in memory that changes
+    # on every restart (tests and quick local runs only).
+    signing-key-file: ${JWT_SIGNING_KEY_FILE:}
     # AES-256 key (base64) that encrypts the OTP secrets in identity_db.
     # shortcut: the default is a development key committed with the demo secrets; set OTP_ENCRYPTION_KEY
     # and re-encrypt the secrets before any real deployment.

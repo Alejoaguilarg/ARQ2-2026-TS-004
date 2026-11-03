@@ -26,7 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * audit_records and audit_event_ids (V1). Insert and select only: the connection runs as role audit_rw,
+ * audit_records and audit_event_ids (V1). Insert and select only: the service logs in as audit_app (V2), which inherits audit_rw,
  * which has no UPDATE, DELETE or TRUNCATE privilege, and a trigger rejects them for every role.
  */
 @Repository

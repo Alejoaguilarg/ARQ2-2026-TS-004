@@ -10,7 +10,7 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - api-gateway:8080
+          - api-gateway:9090   # management port, not published
           - identity-service:8080
           - wallet-service:8080
           - transfer-service:8080

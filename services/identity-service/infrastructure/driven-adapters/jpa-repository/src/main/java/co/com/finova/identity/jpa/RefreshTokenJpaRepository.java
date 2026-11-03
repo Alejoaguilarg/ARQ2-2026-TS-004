@@ -25,4 +25,7 @@ public interface RefreshTokenJpaRepository extends Repository<RefreshTokenEntity
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE RefreshTokenEntity t SET t.status = 'REVOKED' WHERE t.familyId = :familyId")
     int revokeFamily(@Param("familyId") UUID familyId);
+
+    @Query("SELECT COUNT(t) > 0 FROM RefreshTokenEntity t WHERE t.familyId = :familyId AND t.status = 'REVOKED'")
+    boolean anyRevokedInFamily(@Param("familyId") UUID familyId);
 }

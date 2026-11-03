@@ -33,4 +33,9 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
     public void revokeFamily(UUID familyId) {
         tokens.revokeFamily(familyId);
     }
+
+    @Override
+    public boolean isFamilyRevoked(UUID familyId) {
+        return tokens.anyRevokedInFamily(familyId);
+    }
 }

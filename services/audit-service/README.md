@@ -43,13 +43,13 @@ Appends are serialized: the queue has a single active consumer, the listener run
 
 `GET /audit/verify` walks the range in batches of 1 000 and reports the first broken link: content that no longer matches its hash, a `prevHash` that does not match the previous record, or a missing `seq` (a deleted row).
 
-## Database guarantees (Flyway `V1__create_audit_schema.sql`)
+## Database guarantees (Flyway `V1__create_audit_schema.sql`, `V2__service_login_role.sql`)
 
-- The service connects with the login of `SPRING_DATASOURCE_USERNAME` and immediately runs `SET ROLE audit_rw` (Hikari `connection-init-sql`). `audit_rw` has **only** `INSERT` and `SELECT` on `audit_records` and `audit_event_ids`.
+- The service logs in as its own role (`SPRING_DATASOURCE_USERNAME`, default `audit_app`), created by V2: not a superuser, not the owner, and its only privileges are inherited from `audit_rw`, which has **only** `INSERT` and `SELECT` on `audit_records` and `audit_event_ids`. There is no `SET ROLE` to undo: `RESET ROLE` gives nothing back.
 - A trigger rejects `UPDATE`, `DELETE` and `TRUNCATE` for every role, owner included, on the parent table, every partition and `audit_event_ids` (F5.4).
 - `audit_event_ids (event_id PRIMARY KEY, seq UNIQUE)` enforces one record per `eventId`; PostgreSQL does not allow that unique constraint on the partitioned table itself.
 - `audit_records` is partitioned by month on `recorded_at` (UTC). The migration creates the current and next month; `AuditPartitionMaintenance` keeps them ahead every 6 h through `audit_ensure_month_partition()` (`SECURITY DEFINER`). `audit_records_default` catches a record whose month has no partition yet.
-- Flyway runs as the database owner (it gets its own connection because `spring.flyway.user` is set).
+- Flyway runs as the database owner (`SPRING_FLYWAY_USER`, its own connection) and fills the service role's name and password from the datasource settings.
 - A superuser can still switch triggers off; the hash chain is what detects that (ADR 005).
 
 ## Messaging (spec §4.2, §4.5)

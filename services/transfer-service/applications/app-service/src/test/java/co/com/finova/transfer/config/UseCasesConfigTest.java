@@ -2,6 +2,7 @@ package co.com.finova.transfer.config;
 
 import co.com.finova.transfer.model.common.gateways.TransactionRunner;
 import co.com.finova.transfer.model.message.gateways.MessagePublisher;
+import co.com.finova.transfer.model.outbox.OutboxRetryBackoff;
 import co.com.finova.transfer.model.outbox.gateways.OutboxRelayRepository;
 import co.com.finova.transfer.model.outbox.gateways.OutboxRepository;
 import co.com.finova.transfer.model.processedmessage.gateways.ProcessedMessageRepository;
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,6 +52,11 @@ class UseCasesConfigTest {
     @Configuration
     @Import({UseCasesConfig.class, SagaConfig.class, ClockConfig.class})
     static class Ports {
+
+        @Bean
+        OutboxRetryBackoff outboxRetryBackoff() {
+            return new OutboxRetryBackoff(Duration.ofSeconds(1), Duration.ofMinutes(5));
+        }
 
         @Bean
         TransferRepository transferRepository() {

@@ -31,28 +31,40 @@ spring:
     gateway:
       mvc:
         routes:
-          # spec.md §3.1.3. AuthenticationFilter strips client-sent X-User-Id, X-Device-Id and
-          # X-User-Roles and injects the verified ones (§3.1 step 5), so routes need no header filters.
+          # spec.md §3.1.3: exactly the 10 public endpoints, by method and path. Anything else, including other
+          # endpoints of the same services, answers 404 instead of reaching them. AuthenticationFilter strips
+          # client-sent X-User-Id, X-Device-Id and X-User-Roles and injects the verified ones (§3.1 step 5), so
+          # routes need no header filters.
           - id: identity
             uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
             predicates:
-              - Path=/auth/**
+              - Method=POST
+              - Path=/auth/login,/auth/refresh,/auth/logout,/auth/financial-session
           - id: identity-users
             uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
             predicates:
-              - Path=/users/**
+              - Method=POST
+              - Path=/users/lookup
           - id: wallet
             uri: ${WALLET_SERVICE_URI:http://localhost:8082}
             predicates:
-              - Path=/wallets/**
-          - id: transfer
+              - Method=GET
+              - Path=/wallets/me/balance
+          - id: transfer-create
             uri: ${TRANSFER_SERVICE_URI:http://localhost:8083}
             predicates:
-              - Path=/transfers/**
+              - Method=POST
+              - Path=/transfers
+          - id: transfer-status
+            uri: ${TRANSFER_SERVICE_URI:http://localhost:8083}
+            predicates:
+              - Method=GET
+              - Path=/transfers/{transferId}
           - id: audit
             uri: ${AUDIT_SERVICE_URI:http://localhost:8084}
             predicates:
-              - Path=/audit/**
+              - Method=GET
+              - Path=/audit/records,/audit/verify
 finova:
   security:
     # Identity's internal JWKS endpoint (spec.md §3.1.3) and the iss of its tokens.
@@ -62,6 +74,10 @@ finova:
     # docker-compose. Host names or IPs, comma-separated; empty means the Gateway is the edge.
     trusted-proxies: ${TRUSTED_PROXIES:}
 management:
+  server:
+    # spec.md §1.4: only the Gateway's API is exposed. Health and metrics answer on their own port, which
+    # docker-compose does not publish: the healthcheck and Prometheus reach it inside the network only.
+    port: ${MANAGEMENT_SERVER_PORT:9090}
   health:
     rabbit:
       # The audit is never in the critical path: a down broker must not take the Gateway out of service.
