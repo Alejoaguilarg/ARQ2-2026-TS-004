@@ -34,6 +34,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 40;
     // Retries answered from Redis without calling Transfer: the double charges this filter prevented (spec F3).
     static final String REPLAYS = "finova.gateway.idempotent.replays";
+    // The replayed body, read by TransferAuditFilter to record the transfer it replayed (spec §4.8).
+    static final String REPLAY_ATTRIBUTE = "finova.replayedBody";
 
     // Registered at 0 when this bean is created on start (GatewayResponses is only loaded on the first rejection):
     // a counter born at 1 has no earlier sample, so increase() reads 0 and the first fail-closed after a restart
@@ -97,6 +99,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                 response.setContentType("application/json");
                 response.setHeader("Idempotent-Replayed", "true");
                 Metrics.counter(REPLAYS).increment();
+                request.setAttribute(REPLAY_ATTRIBUTE, replay.body());
                 response.getOutputStream().write(replay.body().getBytes(StandardCharsets.UTF_8));
             }
         }
