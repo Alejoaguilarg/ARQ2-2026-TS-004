@@ -20,3 +20,7 @@ include ':rabbitmq-publisher'
 project(':rabbitmq-publisher').projectDir = file('./infrastructure/driven-adapters/rabbitmq-publisher')
 include ':message-json'
 project(':message-json').projectDir = file('./infrastructure/helpers/message-json')
+include ':rabbitmq-consumer'
+project(':rabbitmq-consumer').projectDir = file('./infrastructure/entry-points/rabbitmq-consumer')
+include ':outbox-relay'
+project(':outbox-relay').projectDir = file('./infrastructure/entry-points/outbox-relay')

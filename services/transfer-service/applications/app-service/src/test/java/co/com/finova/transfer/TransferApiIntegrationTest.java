@@ -30,7 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * GET /transfers/{id} is visible to its two users only (§3.9).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "management.health.rabbit.enabled=false")
+        properties = {"management.health.rabbit.enabled=false", "adapters.outbox.relay-enabled=false",
+                "spring.rabbitmq.listener.simple.auto-startup=false"})
 @Testcontainers
 class TransferApiIntegrationTest {
 

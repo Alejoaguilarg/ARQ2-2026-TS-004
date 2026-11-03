@@ -18,6 +18,19 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+    listener:
+      simple:
+        # Spec §4.2: manual acks; a rejected delivery is never requeued, so the queue dead-letters it to its
+        # .retry queue (5 s) and it comes back. The listener only consumes the existing queue.
+        acknowledge-mode: "manual"
+        default-requeue-rejected: false
+        missing-queues-fatal: true
+        prefetch: 10
+logging:
+  pattern:
+    # Spec §1.4: correlationId and transferId in every log line, from the MDC (CorrelationIdFilter for HTTP,
+    # MessageLogContext for messages); the trace ids link a line to its trace. Empty brackets when absent.
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] [%X{traceId:-},%X{spanId:-}] "
 management:
   endpoints:
     web:
@@ -30,3 +43,10 @@ management:
 adapters:
   rabbitmq:
     confirm-timeout: "5s"
+    # Spec §4.5: 3 retries after the first delivery (4 deliveries), then the .dlq.
+    max-retries: 3
+  outbox:
+    # One batch every 100 ms, as in Wallet (ADR 002 targets a saga under 1 s, ~4 relay hops per transfer).
+    relay-enabled: true
+    relay-interval: "100ms"
+    batch-size: 100
