@@ -11,7 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RateLimitFilterTest {
 
     private final InMemoryCounterStore counters = new InMemoryCounterStore();
-    private final RateLimitFilter filter = new RateLimitFilter(new RateLimitUseCase(counters));
+    private final RateLimitFilter filter = new RateLimitFilter(new RateLimitUseCase(counters),
+            new ClientAddress(java.util.List.of("frontend"), host -> java.util.Set.of("172.18.0.9"), java.time.Clock.systemUTC()));
 
     private int upstreamCalls;
     private final FilterChain upstream = (request, response) -> upstreamCalls++;
@@ -61,6 +62,23 @@ class RateLimitFilterTest {
         }
 
         assertThat(send(ipRequest("/auth/login", "10.0.0.1")).getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void behindTheWebProxyEachBrowserHasItsOwnLoginLimit() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            send(proxied("203.0.113.1"));
+        }
+
+        assertThat(send(proxied("203.0.113.1")).getStatus()).isEqualTo(429);
+        assertThat(send(proxied("203.0.113.2")).getStatus()).isEqualTo(200);
+        assertThat(counters.values).containsKey("rl:auth:203.0.113.1").doesNotContainKey("rl:auth:172.18.0.9");
+    }
+
+    private static MockHttpServletRequest proxied(String browser) {
+        MockHttpServletRequest request = ipRequest("/auth/login", "172.18.0.9");
+        request.addHeader("X-Real-IP", browser);
+        return request;
     }
 
     @Test

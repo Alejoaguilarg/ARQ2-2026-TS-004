@@ -2,9 +2,9 @@
 #
 #   docker compose up -d                          infrastructure only (DBs, Redis, RabbitMQ, observability)
 #   docker compose up -d --build wallet-service   one service plus the infrastructure it depends on
-#   docker compose --profile apps up -d --build   the whole system (requires every service under ./services)
+#   docker compose --profile apps up -d --build   the whole system, web app at http://localhost:5173
 #
-# Only the API Gateway is published to the host (spec.md §1.4). Ops UIs bind to 127.0.0.1 only.
+# Only the web app and the API Gateway are published to the host (spec.md §1.4). Ops UIs bind to 127.0.0.1 only.
 
 name: finova
 
@@ -55,6 +55,23 @@ x-postgres: &postgres
 
 services:
   # ---------------------------------------------------------------- edge
+  # The web app. nginx serves it and forwards /api/* to the Gateway (frontend/nginx/default.conf).
+  frontend:
+    profiles: ["apps"]
+    restart: unless-stopped
+    networks: [backend]
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    depends_on:
+      api-gateway: { condition: service_healthy }
+
   api-gateway:
     <<: *app
     build:
@@ -69,6 +86,8 @@ services:
       TRANSFER_SERVICE_URI: http://transfer-service:8080
       AUDIT_SERVICE_URI: http://audit-service:8080
       JWKS_URI: http://identity-service:8080/.well-known/jwks.json
+      # nginx in front of the web app: its X-Real-IP is the browser for the per-IP limits (spec.md §3.1.2).
+      TRUSTED_PROXIES: frontend
     # Health and metrics answer on the management port 9090, which is not published (spec §1.4).
     healthcheck:
       <<: *app-healthcheck

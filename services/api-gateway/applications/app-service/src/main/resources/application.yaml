@@ -70,6 +70,9 @@ finova:
     # Identity's internal JWKS endpoint (spec.md §3.1.3) and the iss of its tokens.
     jwks-uri: ${JWKS_URI:http://localhost:8081/.well-known/jwks.json}
     issuer: ${JWT_ISSUER:finova-identity}
+    # Proxies whose X-Real-IP is the client for the per-IP limits (ClientAddress): the web frontend's nginx in
+    # docker-compose. Host names or IPs, comma-separated; empty means the Gateway is the edge.
+    trusted-proxies: ${TRUSTED_PROXIES:}
 management:
   server:
     # spec.md §1.4: only the Gateway's API is exposed. Health and metrics answer on their own port, which

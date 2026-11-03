@@ -77,7 +77,8 @@ docker compose --profile apps down -v
 
 | URL | What |
 |-----|------|
-| http://localhost:8080 | API Gateway (the only service exposed, spec.md §1.4) |
+| http://localhost:5173 | Web app (`frontend/`): nginx serves it and forwards `/api/*` to the Gateway |
+| http://localhost:8080 | API Gateway (the only backend service exposed, spec.md §1.4) |
 | http://localhost:15672 | RabbitMQ management |
 | http://localhost:9090 | Prometheus |
 | http://localhost:3000 | Grafana: Prometheus, Loki and Tempo datasources plus the "Finova - Overview" dashboard |

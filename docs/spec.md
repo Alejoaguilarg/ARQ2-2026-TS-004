@@ -428,6 +428,8 @@ Wallet operations are also idempotent per `transferId` (§4.7).
 
 `429` responses include `Retry-After`.
 
+**Client IP.** The per-IP limits count the socket address: the Gateway is the edge, and a client-sent `X-Forwarded-For` is ignored. The one exception is a trusted proxy listed in `TRUSTED_PROXIES` (the web frontend's nginx in docker-compose): a request from it is counted by its `X-Real-IP`, which nginx overwrites with the address it received the request from. Without it, every browser behind nginx would share one login limit.
+
 **Lockout counting.** The Gateway reads Identity's answer. On `401 INVALID_CREDENTIALS` from `POST /auth/login` it increments `fail:login:{email}`; on `200` it deletes the counter. On `401 STEP_UP_FAILED` from `POST /auth/financial-session` it increments `fail:stepup:{userId}`; on `201` it deletes the counter. When a counter reaches 5, the Gateway sets the matching `lock:*` key, and while it exists that route answers `423` without reaching Identity.
 
 #### 3.1.3 Routes
