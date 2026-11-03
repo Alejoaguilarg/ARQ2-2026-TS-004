@@ -21,6 +21,8 @@ Finova's current architecture performs chained synchronous HTTP calls (User-Serv
 
 ## Target architecture (summary)
 
+![Finova C4 System Context Diagram](docs/assets/finova-C4-context.png)
+
 ![Finova C4 Container Diagram](docs/assets/finova-C4.png)
 
 - **API Gateway** terminates auth, enforces **Idempotency-Key** on write operations, and rate-limits by user/session.
