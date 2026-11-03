@@ -45,7 +45,7 @@ describe('App', () => {
 
     expect(screen.getByRole('img', { name: 'El asistente celebra' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '¡Hola, Ana!' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Tu billetera' }, { timeout: 2000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saldo disponible' }, { timeout: 2000 })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/billetera');
     expect(screen.queryByRole('navigation', { name: 'Secciones' })).toBeNull();
   });
@@ -116,7 +116,7 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'Actividad de envíos' }, { timeout: 2000 })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'Billetera' }));
-    expect(screen.getByRole('heading', { name: 'Tu billetera' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Saldo disponible' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Billetera' })).toHaveAttribute('aria-current', 'page');
     await user.click(screen.getByRole('link', { name: 'Actividad' }));
     expect(window.location.pathname).toBe('/actividad');
@@ -131,7 +131,7 @@ describe('App', () => {
     render(<App session={new Session()} />);
 
     expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Tu billetera' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saldo disponible' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/billetera');
     expect(screen.getByText('ana@example.com')).toBeInTheDocument();
 
