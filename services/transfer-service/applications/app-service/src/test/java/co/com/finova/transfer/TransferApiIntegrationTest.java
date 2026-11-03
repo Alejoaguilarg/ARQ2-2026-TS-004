@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"management.health.rabbit.enabled=false", "adapters.outbox.relay-enabled=false",
-                "spring.rabbitmq.listener.simple.auto-startup=false"})
+                "spring.rabbitmq.listener.simple.auto-startup=false", "adapters.saga.sweeper-enabled=false"})
 @Testcontainers
 class TransferApiIntegrationTest {
 
