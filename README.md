@@ -85,13 +85,13 @@ docker compose --profile apps up -d --build --no-deps api-gateway       # --no-d
 
 **Demo users** (seeded by Identity's Flyway migration `V2__demo_users.sql`; registration is out of scope). Password for all: `Finova2026!`
 
-| Email | userId | Roles | PIN | TOTP secret (base32) |
-|-------|--------|-------|-----|----------------------|
-| ana@example.com | `7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c` | USER | 4821 | `JOJYF2MFLYMVTZVHPQXBEZXZPG3BSRZ2` |
-| beto@example.com | `2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f` | USER | 1357 | `PKZZTNT77VM46PZFLWFLUYH2A6H4CQIH` |
-| auditor@example.com | `5e8a1c3d-7b9f-4d2e-8a6c-1f3b5d7e9a0c` | USER, AUDITOR | 2468 | `3VXYPA2XFSJ24ISKPOYKKEZFJEKVK4SM` |
+| Email | userId | Roles | PIN | TOTP secret (base32) | Opening balance |
+|-------|--------|-------|-----|----------------------|-----------------|
+| ana@example.com | `7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c` | USER | 4821 | `JOJYF2MFLYMVTZVHPQXBEZXZPG3BSRZ2` | 500000.00 COP |
+| beto@example.com | `2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f` | USER | 1357 | `PKZZTNT77VM46PZFLWFLUYH2A6H4CQIH` | 100000.00 COP |
+| auditor@example.com | `5e8a1c3d-7b9f-4d2e-8a6c-1f3b5d7e9a0c` | USER, AUDITOR | 2468 | `3VXYPA2XFSJ24ISKPOYKKEZFJEKVK4SM` | 0.00 COP |
 
-Wallet seeds must use these same `userId`s. Add a TOTP secret to any authenticator app (6 digits, 30 s) to use `"method": "OTP"` on `POST /auth/financial-session`. The secrets are stored encrypted with the development key in `OTP_ENCRYPTION_KEY`; these are demo credentials only.
+Wallet's `V2__demo_wallets.sql` gives each user one wallet with that balance, recorded as an `OPENING` ledger entry. Add a TOTP secret to any authenticator app (6 digits, 30 s) to use `"method": "OTP"` on `POST /auth/financial-session`. The secrets are stored encrypted with the development key in `OTP_ENCRYPTION_KEY`; these are demo credentials only.
 
 **Finding a request in the logs.** Every response carries an `X-Correlation-Id` header, and the Gateway and the services print that id in their log lines. In Grafana, **Explore** → **Loki**: `{service=~".+"} |= "<X-Correlation-Id>"`. See [docs/observability.md](docs/observability.md), which also explains how to add it to a service.
 
