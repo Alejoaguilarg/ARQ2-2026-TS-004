@@ -1,4 +1,4 @@
-package co.com.finova.wallet.api.config;
+package co.com.finova.audit.api.config;
 
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;

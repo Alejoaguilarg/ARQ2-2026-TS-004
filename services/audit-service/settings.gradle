@@ -6,7 +6,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'wallet-service'
+rootProject.name = 'audit-service'
 
 include ':app-service'
 include ':model'
@@ -16,9 +16,7 @@ project(':model').projectDir = file('./domain/model')
 project(':usecase').projectDir = file('./domain/usecase')
 include ':api-rest'
 project(':api-rest').projectDir = file('./infrastructure/entry-points/api-rest')
+include ':rabbitmq-consumer'
+project(':rabbitmq-consumer').projectDir = file('./infrastructure/entry-points/rabbitmq-consumer')
 include ':jpa-repository'
 project(':jpa-repository').projectDir = file('./infrastructure/driven-adapters/jpa-repository')
-include ':redis'
-project(':redis').projectDir = file('./infrastructure/driven-adapters/redis')
-include ':rabbitmq-publisher'
-project(':rabbitmq-publisher').projectDir = file('./infrastructure/driven-adapters/rabbitmq-publisher')

@@ -1,4 +1,4 @@
-package co.com.finova.wallet.config;
+package co.com.finova.audit.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;

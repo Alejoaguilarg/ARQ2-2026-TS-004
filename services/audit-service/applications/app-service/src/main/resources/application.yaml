@@ -1,5 +1,5 @@
 server:
-  port: 8084
+  port: 8080
 
 spring:
   application:
@@ -9,29 +9,44 @@ spring:
     add-properties: false
 
   datasource:
-    url: "jdbc:postgresql://localhost:5436/audit_db"
+    url: "jdbc:postgresql://localhost:5432/audit_db"
     username: "audit"
     password: "audit"
-    driver-class-name: "org.postgresql.Driver"
-
-  jpa:
-    database-platform: "org.hibernate.dialect.PostgreSQLDialect"
-    hibernate:
-      ddl-auto: validate
+    hikari:
+      connection-init-sql: "SET ROLE audit_rw"
 
   flyway:
     enabled: true
     locations: "classpath:db/migration"
+    user: "${spring.datasource.username}"
+    password: "${spring.datasource.password}"
 
   rabbitmq:
-    host: "localhost"
-    port: 5672
-    username: "guest"
-    password: "guest"
+    host: "${RABBITMQ_HOST:localhost}"
+    port: ${RABBITMQ_PORT:5672}
+    username: "${RABBITMQ_USERNAME:guest}"
+    password: "${RABBITMQ_PASSWORD:guest}"
+    virtual-host: "${RABBITMQ_VHOST:/}"
+
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:false}
+
+    # Queues/exchanges already exist in RabbitMQ.
+    dynamic: false
+
     publisher-confirm-type: "correlated"
     publisher-returns: true
+
     template:
       mandatory: true
+
+    listener:
+      simple:
+        acknowledge-mode: "manual"
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 20
+        default-requeue-rejected: false
 
 management:
   endpoints:
@@ -44,9 +59,19 @@ management:
       probes:
         enabled: true
 
-cors:
-  allowed-origins: "http://localhost:4200,http://localhost:8080"
-
 adapters:
   rabbitmq:
+    # Audit queues already provisioned in RabbitMQ.
+    audit-queue: "${AUDIT_QUEUE:audit.attempts.q}"
+    audit-retry-queue: "${AUDIT_RETRY_QUEUE:audit.attempts.q.retry}"
+    audit-dlq: "${AUDIT_DLQ:audit.attempts.q.dlq}"
+
     confirm-timeout: "5s"
+
+    # Spec: 5 retries before sending the message to the DLQ.
+    audit-retry-limit: 5
+
+  audit:
+    partitions:
+      initial-delay: "PT30S"
+      check-interval: "PT6H"

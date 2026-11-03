@@ -334,3 +334,6 @@ gradle-app.setting
 # -----
 *.hprof
 
+# Local environment variables / secrets
+.env
+.env.local

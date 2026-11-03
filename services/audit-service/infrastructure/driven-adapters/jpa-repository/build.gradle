@@ -1,13 +1,12 @@
 dependencies {
     implementation project(':model')
-
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.reactivecommons.utils:object-mapper-api:0.1.0'
-
+    // JdbcClient over audit_db: the trail is append-only SQL, so there are no JPA entities.
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
 
     runtimeOnly 'org.postgresql:postgresql'
 
-    testImplementation 'org.reactivecommons.utils:object-mapper:0.1.0'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }
