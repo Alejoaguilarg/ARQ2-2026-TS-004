@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.filter.outputs.changes }}
+      frontend: ${{ steps.web.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -36,6 +37,12 @@ jobs:
             transfer-service: [services/transfer-service/**, .github/workflows/ci.yml, .github/scripts/**]
             audit-service: [services/audit-service/**, .github/workflows/ci.yml, .github/scripts/**]
             notification-service: [services/notification-service/**, .github/workflows/ci.yml, .github/scripts/**]
+      # The web app is not a Gradle service, so it has its own filter and job.
+      - id: web
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend: [frontend/**, .github/workflows/ci.yml]
 
   build:
     needs: changes
@@ -77,11 +84,33 @@ jobs:
           path: services/${{ matrix.service }}/**/build/reports/
           retention-days: 7
 
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      # Type check + production build, then the tests with line coverage >= 90% (vite.config.ts).
+      - run: npm run build
+      - run: npm run coverage
+      - name: The nginx config is valid
+        run: docker run --rm -v "$PWD/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" -v "$PWD/nginx/security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro" --add-host api-gateway:127.0.0.1 nginx:1.27-alpine nginx -t
+
   # The one check to require in branch protection: the build matrix only exists for the services a
   # PR touches, so requiring "build (x)" would block every PR that does not change x.
   ci-ok:
     if: always()
-    needs: [changes, build, infra]
+    needs: [changes, build, frontend, infra]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
