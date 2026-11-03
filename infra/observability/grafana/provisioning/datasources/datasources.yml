@@ -15,9 +15,9 @@ datasources:
     url: http://loki:3100
     jsonData:
       derivedFields:
-        # Spring Boot 3 log correlation: [application,traceId,spanId]
+        # logging.pattern.correlation of the services: [correlationId] [traceId,spanId]
         - name: traceId
-          matcherRegex: '\[[\w-]*,([0-9a-f]{32}),'
+          matcherRegex: '\[([0-9a-f]{32}),[0-9a-f]{16}\]'
           datasourceUid: tempo
           url: '$${__value.raw}'
 
