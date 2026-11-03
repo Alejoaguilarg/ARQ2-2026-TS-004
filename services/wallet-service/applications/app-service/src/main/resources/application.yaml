@@ -22,9 +22,6 @@ spring:
     redis:
       host: "localhost"
       port: 6379
-      # Lettuce waits 60 s by default; the balance endpoint must fall back to PostgreSQL fast (spec F2.6).
-      timeout: "500ms"
-      connect-timeout: "500ms"
   rabbitmq:
     host: "localhost"
     port: 5672
