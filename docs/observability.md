@@ -49,10 +49,11 @@ In `applications/app-service/src/main/resources/application.yaml`:
 ```yaml
 logging:
   pattern:
-    correlation: "[%X{correlationId:-}] [%X{transferId:-}] "
+    correlation: "[%X{correlationId:-}] [%X{traceId:-},%X{spanId:-}] [%X{transferId:-}] "
 ```
 
-The Gateway and Identity print only `correlationId`: they never handle a transfer.
+The Gateway and Identity leave out `transferId`: they never handle a transfer. Keep `[traceId,spanId]` right after the
+correlationId: Grafana's link from a log line to its trace looks for it there.
 
 ### 3. RabbitMQ messages
 
@@ -82,6 +83,28 @@ Every message carries `correlationId` and `transferId` in its envelope (spec.md 
 Write one integration test that sends a request with `X-Correlation-Id`, captures the output with Spring Boot's
 `OutputCaptureExtension`, and asserts that the log line contains `[<id>]`. `AuthApiIntegrationTest` in Identity
 and `GatewayPipelineIntegrationTest` in the Gateway are examples.
+
+## Traces
+
+The Gateway and Identity send traces to Tempo through Alloy (`MANAGEMENT_OTLP_TRACING_ENDPOINT` in docker-compose; every
+request is sampled). The Gateway propagates the trace to the service it calls, so one request is one trace:
+
+```
+api-gateway       http post /auth/**     (request received)
+└─ api-gateway    http post              (call to Identity)
+   └─ identity-service  http post /auth/login
+```
+
+Every log line also carries `[traceId,spanId]` after the correlationId:
+
+```
+WARN 1 --- [identity-service] [nio-8080-exec-2] [b76d46ee-654b-4484-b481-39a755cd6b11] [fae888b5cb92f5f5f46a5587bd4f8f49,4e77f5a79774d381] ... : Login rejected: invalid credentials
+```
+
+In Grafana, open a log line in **Explore → Loki** and click the **traceId** link to see its trace in Tempo; from a
+trace, **Logs for this span** goes back to Loki. A service adds tracing with two dependencies in `app-service`:
+`io.micrometer:micrometer-tracing-bridge-otel` and `io.opentelemetry:opentelemetry-exporter-otlp`, plus the log
+pattern above.
 
 ## Alerts
 

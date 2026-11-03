@@ -188,7 +188,9 @@ class GatewayPipelineIntegrationTest {
         String id = response.headers().firstValue("X-Correlation-Id").orElseThrow();
         assertThat(response.body()).contains("\"correlationId\":\"" + id + "\"");
         // UpstreamErrorFilter logs the unreachable Identity; the line carries the id (logging.pattern.correlation).
-        assertThat(logs.getOut()).containsPattern("\\[" + id + "\\].*Upstream unavailable");
+        assertThat(logs.getOut()).containsPattern("\\[" + id + "\\].*Upstream unavailable")
+                // [traceId,spanId] right after it: Grafana links the line to its trace in Tempo.
+                .containsPattern("\\[" + id + "\\] \\[[0-9a-f]{32},[0-9a-f]{16}\\]");
     }
 
     @Test

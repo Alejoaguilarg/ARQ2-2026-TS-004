@@ -37,4 +37,6 @@ management:
 logging:
   pattern:
     # spec.md §1: the correlationId goes in every log line; it is the one the Gateway returned to the client.
-    correlation: "[%X{correlationId:-}] "
+    # [correlationId] [traceId,spanId]: the second part links a log line to its trace in Tempo (Grafana Loki
+    # derived field in infra/observability/grafana/provisioning/datasources/datasources.yml).
+    correlation: "[%X{correlationId:-}] [%X{traceId:-},%X{spanId:-}] "
