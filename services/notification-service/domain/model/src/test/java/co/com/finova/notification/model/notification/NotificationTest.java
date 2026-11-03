@@ -14,7 +14,7 @@ class NotificationTest {
         UUID id = UUID.randomUUID();
         Notification notification = new Notification(id, Channel.SMS, "+573001112233",
                 TransferEventType.TRANSFER_REJECTED, UUID.randomUUID(), "1.00", "COP", "INSUFFICIENT_FUNDS",
-                "Asunto", "Mensaje", null);
+                "Subject", "Message", null);
 
         assertThat(notification.notificationId()).isEqualTo(id);
         assertThat(notification.to()).isEqualTo("+573001112233");

@@ -71,6 +71,6 @@ class HttpNotificationProviderTest {
 
     private static Notification notification(Channel channel, String to) {
         return new Notification(UUID.randomUUID(), channel, to, TransferEventType.TRANSFER_COMPLETED,
-                UUID.randomUUID(), "150000.00", "COP", null, "Asunto", "Mensaje", "corr-1");
+                UUID.randomUUID(), "150000.00", "COP", null, "Subject", "Message", "corr-1");
     }
 }
