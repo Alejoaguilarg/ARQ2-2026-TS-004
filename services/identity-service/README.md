@@ -1,47 +1,58 @@
-# Proyecto Base Implementando Clean Architecture
+# Identity Service
 
-## Antes de Iniciar
+Users, sessions and the step-up that every transfer needs (spec §3.3 to §3.6, §3.12, Feature 1). It signs the access and financial-session tokens, publishes the public keys the Gateway verifies them with, and resolves a recipient's email to a `userId`.
+Java 21, Spring Boot 3.4, Bancolombia clean-architecture scaffold, PostgreSQL 16 (`identity_db`), Redis.
 
-Empezaremos por explicar los diferentes componentes del proyectos y partiremos de los componentes externos, continuando con los componentes core de negocio (dominio) y por último el inicio y configuración de la aplicación.
+## What it does
 
-Lee el artículo [Clean Architecture — Aislando los detalles](https://medium.com/bancolombia-tech/clean-architecture-aislando-los-detalles-4f9530f35d7a)
+| Endpoint | Does |
+|---|---|
+| `POST /auth/login` | Checks the argon2 password hash, registers the device on first use, opens a session: a 15-minute RS256 access token (`sub`, `did`, `sid`, `jti`, `roles`) and a 7-day refresh token bound to the device (F1.1) |
+| `POST /auth/refresh` | Rotates the refresh token inside its session (F1.2). A rotated token presented again revokes the whole session, in `identity_db` and in Redis (F1.3); a revoked session never comes back |
+| `POST /auth/logout` | Revokes the session and the access token's `jti` in Redis (F1.4) |
+| `POST /auth/financial-session` | Verifies the PIN (argon2) or a TOTP code (RFC 6238) and issues a 5-minute token with scope `transfer:create`, bound to the user and device (F1.7) |
+| `POST /users/lookup` | `{email}` → `{userId}` of an active or locked user, 404 otherwise. The email is never logged |
+| `GET /.well-known/jwks.json` | Public signing keys, internal only: the Gateway reads it, it is not routed |
 
-# Arquitectura
+The Gateway in front counts failed logins and step-ups for the lockouts, applies the rate limits and checks the revocation keys this service writes (`revoked:jti:*`, `revoked:sid:*`).
 
-![Clean Architecture](https://miro.medium.com/max/1400/1*ZdlHz8B0-qu9Y-QO3AXR_w.png)
+## Modules
 
-## Domain
+```
+domain/model                     User, RefreshToken, TokenPair, AccessTokenClaims, SignedToken, ports
+domain/usecase                   LoginUseCase, RefreshSessionUseCase, LogoutUseCase, FinancialSessionUseCase, FindRecipientUseCase
+infrastructure/entry-points
+  api-rest                       AuthController, UserController, JwksController, ErrorResponse (spec §3.2)
+infrastructure/driven-adapters
+  jpa-repository                 Users, refresh tokens and devices; Flyway V1 schema, V2 demo users, V3 demo OTP secrets
+  jwt                            RsaTokenSigner, SigningKeyFile (the RS256 key kept in a PEM file)
+  argon2                         Argon2CredentialVerifier (passwords and PINs)
+  totp                           TotpCodeVerifier (AES-256-GCM encrypted secrets)
+  redis                          RedisRevocationStore
+applications/app-service         Spring Boot application and configuration
+```
 
-Es el módulo más interno de la arquitectura, pertenece a la capa del dominio y encapsula la lógica y reglas del negocio mediante modelos y entidades del dominio.
+## Signing key
 
-## Usecases
+The RS256 key is read from `JWT_SIGNING_KEY_FILE` (PKCS#8 PEM). If the file does not exist, Identity creates it on first start, so restarts keep every issued token valid and every instance signs with the same key. The `kid` is the key's RFC 7638 thumbprint. docker-compose keeps the file in the `identity-keys` volume; no private key is committed. Without the variable the key lives in memory and changes on every restart (tests and quick local runs only).
 
-Este módulo gradle perteneciente a la capa del dominio, implementa los casos de uso del sistema, define lógica de aplicación y reacciona a las invocaciones desde el módulo de entry points, orquestando los flujos hacia el módulo de entities.
+## Configuration
 
-## Infrastructure
+| Variable | Default | What |
+|---|---|---|
+| `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | `localhost:5432/identity_db` | Database |
+| `SPRING_DATA_REDIS_HOST` | `localhost` | Revocation store |
+| `JWT_ISSUER` | `finova-identity` | `iss` of every token; the Gateway checks the same value |
+| `JWT_SIGNING_KEY_FILE` | empty | PEM file of the signing key (see above) |
+| `OTP_ENCRYPTION_KEY` | development key | AES-256 key of the OTP secrets. Demo default only: set your own outside the demo |
 
-### Helpers
+Demo users, PINs and TOTP secrets are listed in the root `README.md`; all use the password `Finova2026!`.
 
-En el apartado de helpers tendremos utilidades generales para los Driven Adapters y Entry Points.
+## Run and test
 
-Estas utilidades no están arraigadas a objetos concretos, se realiza el uso de generics para modelar comportamientos
-genéricos de los diferentes objetos de persistencia que puedan existir, este tipo de implementaciones se realizan
-basadas en el patrón de diseño [Unit of Work y Repository](https://medium.com/@krzychukosobudzki/repository-design-pattern-bc490b256006)
+```bash
+./gradlew build                      # unit tests + Testcontainers tests (PostgreSQL, Redis), coverage >= 90 %
+docker compose --profile apps up -d --build identity-service   # from the repository root
+```
 
-Estas clases no puede existir solas y debe heredarse su compartimiento en los **Driven Adapters**
-
-### Driven Adapters
-
-Los driven adapter representan implementaciones externas a nuestro sistema, como lo son conexiones a servicios rest,
-soap, bases de datos, lectura de archivos planos, y en concreto cualquier origen y fuente de datos con la que debamos
-interactuar.
-
-### Entry Points
-
-Los entry points representan los puntos de entrada de la aplicación o el inicio de los flujos de negocio.
-
-## Application
-
-Este módulo es el más externo de la arquitectura, es el encargado de ensamblar los distintos módulos, resolver las dependencias y crear los beans de los casos de use (UseCases) de forma automática, inyectando en éstos instancias concretas de las dependencias declaradas. Además inicia la aplicación (es el único módulo del proyecto donde encontraremos la función “public static void main(String[] args)”.
-
-**Los beans de los casos de uso se disponibilizan automaticamente gracias a un '@ComponentScan' ubicado en esta capa.**
+Use-case tests are named after the spec scenarios they cover (`f12_…`, `f13_…`). `AuthApiIntegrationTest` runs login, refresh, reuse detection, logout, step-up and lookup against a real PostgreSQL and Redis. `docs/postman/finova-auth.postman_collection.json` exercises the same flows through the Gateway.
