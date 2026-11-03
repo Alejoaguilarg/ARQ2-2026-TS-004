@@ -14,10 +14,10 @@ public final class NotificationMessages {
     public static String subject(TransferOutcome outcome, UUID userId) {
         return switch (outcome.type()) {
             case TRANSFER_COMPLETED -> outcome.isSender(userId)
-                    ? "Finova: transferencia enviada"
-                    : "Finova: recibiste una transferencia";
-            case TRANSFER_REJECTED -> "Finova: transferencia rechazada";
-            case TRANSFER_REVERSED -> "Finova: transferencia reversada";
+                    ? "Finova: transfer sent"
+                    : "Finova: you received a transfer";
+            case TRANSFER_REJECTED -> "Finova: transfer rejected";
+            case TRANSFER_REVERSED -> "Finova: transfer reversed";
         };
     }
 
@@ -25,27 +25,27 @@ public final class NotificationMessages {
         String money = outcome.amount() + " " + outcome.currency();
         String text = switch (outcome.type()) {
             case TRANSFER_COMPLETED -> outcome.isSender(userId)
-                    ? "Enviaste " + money + ". La transferencia se completó con éxito."
-                    : "Recibiste " + money + " en tu billetera Finova.";
-            case TRANSFER_REJECTED -> "Tu transferencia de " + money + " fue rechazada: "
-                    + describe(outcome.reason()) + ". No se descontó dinero de tu billetera.";
-            case TRANSFER_REVERSED -> "Tu transferencia de " + money + " no se pudo completar ("
-                    + describe(outcome.reason()) + "). El dinero fue devuelto a tu billetera.";
+                    ? "You sent " + money + ". The transfer was completed."
+                    : "You received " + money + " in your Finova wallet.";
+            case TRANSFER_REJECTED -> "Your transfer of " + money + " was rejected: "
+                    + describe(outcome.reason()) + ". No money was taken from your wallet.";
+            case TRANSFER_REVERSED -> "Your transfer of " + money + " could not be completed ("
+                    + describe(outcome.reason()) + "). The money was returned to your wallet.";
         };
-        return text + "\nReferencia: " + outcome.transferId();
+        return text + "\nReference: " + outcome.transferId();
     }
 
     /** Reasons defined in spec §4.4 (TransferRejected and TransferReversed). */
     static String describe(String reason) {
         if (reason == null) {
-            return "motivo no especificado";
+            return "unspecified reason";
         }
         return switch (reason) {
-            case "INSUFFICIENT_FUNDS" -> "fondos insuficientes";
-            case "SENDER_WALLET_NOT_FOUND" -> "no se encontró tu billetera";
-            case "RECIPIENT_WALLET_NOT_FOUND" -> "no se encontró la billetera del destinatario";
-            case "CREDIT_TIMEOUT" -> "el destinatario no pudo recibir el dinero a tiempo";
-            default -> "motivo no especificado";
+            case "INSUFFICIENT_FUNDS" -> "insufficient funds";
+            case "SENDER_WALLET_NOT_FOUND" -> "your wallet was not found";
+            case "RECIPIENT_WALLET_NOT_FOUND" -> "the recipient has no Finova wallet";
+            case "CREDIT_TIMEOUT" -> "the recipient could not receive the money in time";
+            default -> "unspecified reason";
         };
     }
 }

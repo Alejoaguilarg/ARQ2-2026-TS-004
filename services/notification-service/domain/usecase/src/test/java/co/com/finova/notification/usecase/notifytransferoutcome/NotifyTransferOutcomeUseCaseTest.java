@@ -28,7 +28,7 @@ class NotifyTransferOutcomeUseCaseTest {
     private static final UUID SENDER = UUID.fromString("f1e2d3c4-b5a6-4789-8a0b-1c2d3e4f5a6b");
     private static final UUID RECIPIENT = UUID.fromString("b3c9a1e2-5d4f-4a6b-8c7d-9e0f1a2b3c4d");
     private static final UUID TRANSFER = UUID.fromString("a1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    private static final String SENDER_EMAIL = "usuario.a@finova.test";
+    private static final String SENDER_EMAIL = "user.a@finova.test";
     private static final String RECIPIENT_PHONE = "+573000000002";
 
     private InMemoryAdapters.Contacts contacts;
@@ -40,7 +40,7 @@ class NotifyTransferOutcomeUseCaseTest {
     void setUp() {
         contacts = new InMemoryAdapters.Contacts()
                 .add(new RecipientContact(SENDER, SENDER_EMAIL, "+573000000001", null, Channel.EMAIL))
-                .add(new RecipientContact(RECIPIENT, "usuario.b@finova.test", RECIPIENT_PHONE, null, Channel.SMS));
+                .add(new RecipientContact(RECIPIENT, "user.b@finova.test", RECIPIENT_PHONE, null, Channel.SMS));
         logs = new InMemoryAdapters.Logs();
         provider = new InMemoryAdapters.Provider();
         Clock clock = Clock.fixed(Instant.parse("2026-11-02T15:00:00Z"), ZoneOffset.UTC);
@@ -67,7 +67,7 @@ class NotifyTransferOutcomeUseCaseTest {
         assertThat(provider.sent()).singleElement()
                 .satisfies(notification -> {
                     assertThat(notification.to()).isEqualTo(SENDER_EMAIL);
-                    assertThat(notification.message()).contains("fondos insuficientes");
+                    assertThat(notification.message()).contains("insufficient funds");
                 });
         assertThat(logs.size()).isEqualTo(1);
     }

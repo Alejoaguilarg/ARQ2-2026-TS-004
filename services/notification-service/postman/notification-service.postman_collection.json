@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Finova - Notification Service",
-    "description": "Publica los eventos de resultado de transferencia (spec §4.4) en el exchange transfer.events a través de la API HTTP de RabbitMQ, para probar el Notification Service sin depender de Transfer.\n\nVariables: los valores iniciales apuntan al RabbitMQ local del docker-compose (consola en localhost:15672, vhost %2F = '/', usuario finova). Para CloudAMQP cambia el *Current value* de rabbitUrl, vhost, rabbitUser y rabbitPassword. Las contraseñas van solo en Current value: Postman no exporta ese valor, así que no se sube al repo.\n\nPara repetir las pruebas desde cero: TRUNCATE notification_log (ver README).",
+    "description": "Publishes the transfer outcome events (spec §4.4) to the transfer.events exchange through the RabbitMQ HTTP API, to test the Notification Service without Transfer.\n\nVariables: the initial values point to the local RabbitMQ of docker-compose (console at localhost:15672, vhost %2F = '/', user finova). For CloudAMQP change the *Current value* of rabbitUrl, vhost, rabbitUser and rabbitPassword. Passwords go in Current value only: Postman does not export it, so it never reaches the repository.\n\nTo repeat the tests from scratch: TRUNCATE notification_log (see README).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -21,7 +21,7 @@
   },
   "item": [
     {
-      "name": "0. Health del servicio",
+      "name": "0. Service health",
       "event": [
         {
           "listen": "test",
@@ -52,11 +52,11 @@
             "health"
           ]
         },
-        "description": "El servicio debe estar corriendo (IntelliJ o Docker) y conectado a la base y a RabbitMQ."
+        "description": "The service must be running (IntelliJ or Docker) and connected to its database and RabbitMQ."
       }
     },
     {
-      "name": "1. TransferCompleted: Ana le transfiere a Beto",
+      "name": "1. TransferCompleted: Ana sends to Beto",
       "event": [
         {
           "listen": "test",
@@ -101,11 +101,11 @@
             "publish"
           ]
         },
-        "description": "Spec §4.9: avisa a Ana y a Beto por su canal preferido (EMAIL). notification_log: 2 filas SENT."
+        "description": "Spec §4.9: notifies Ana and Beto on their preferred channel (EMAIL). notification_log: 2 rows SENT."
       }
     },
     {
-      "name": "2. TransferCompleted repetido (no reenvía)",
+      "name": "2. TransferCompleted again (not resent)",
       "event": [
         {
           "listen": "test",
@@ -150,11 +150,11 @@
             "publish"
           ]
         },
-        "description": "El mismo evento otra vez (entrega at-least-once). Una notificación SENT nunca se reenvía: no llega ningún correo nuevo."
+        "description": "The same event again (at-least-once delivery). A SENT notification is never resent: no new email arrives."
       }
     },
     {
-      "name": "3. TransferRejected: fondos insuficientes",
+      "name": "3. TransferRejected: insufficient funds",
       "event": [
         {
           "listen": "test",
@@ -199,11 +199,11 @@
             "publish"
           ]
         },
-        "description": "Spec §4.9: solo avisa a Ana, con el motivo."
+        "description": "Spec §4.9: notifies only Ana, with the reason."
       }
     },
     {
-      "name": "4. TransferReversed: compensación",
+      "name": "4. TransferReversed: compensation",
       "event": [
         {
           "listen": "test",
@@ -248,11 +248,11 @@
             "publish"
           ]
         },
-        "description": "Spec §4.9: solo avisa a Ana; el dinero fue devuelto."
+        "description": "Spec §4.9: notifies only Ana; the money was returned."
       }
     },
     {
-      "name": "5. TransferCompleted por SMS y PUSH",
+      "name": "5. TransferCompleted by SMS and PUSH",
       "event": [
         {
           "listen": "test",
@@ -297,11 +297,11 @@
             "publish"
           ]
         },
-        "description": "Usuarios de demo con canal SMS y PUSH: van al simulador del proveedor, no llega correo."
+        "description": "Demo users whose channel is SMS or PUSH: they go to the provider mock, no email arrives."
       }
     },
     {
-      "name": "6. TransferCompleted con proveedor caído (reintentos y DLQ)",
+      "name": "6. TransferCompleted with the provider down (retries and DLQ)",
       "event": [
         {
           "listen": "test",
@@ -346,11 +346,11 @@
             "publish"
           ]
         },
-        "description": "Ana recibe su correo una vez. El usuario 'falla' recibe 503 del simulador: se reintenta cada 5 s, y tras 3 reintentos (4 intentos) el mensaje queda en notification.transfer-events.q.dlq."
+        "description": "Ana gets her email once. The 'fail' user gets 503 from the mock: it is retried every 5 s, and after 3 retries (4 attempts) the message ends in notification.transfer-events.q.dlq."
       }
     },
     {
-      "name": "7. Mensaje inválido (directo a la DLQ)",
+      "name": "7. Invalid message (straight to the DLQ)",
       "event": [
         {
           "listen": "test",
@@ -395,11 +395,11 @@
             "publish"
           ]
         },
-        "description": "Lo que hoy publica Transfer con toString(): no es JSON. No se reintenta: va directo a la DLQ con INVALID_MESSAGE."
+        "description": "A body that is not JSON. It is not retried: it goes straight to the DLQ with INVALID_MESSAGE."
       }
     },
     {
-      "name": "8. Simulador: peticiones recibidas",
+      "name": "8. Mock: requests received",
       "request": {
         "auth": {
           "type": "noauth"
@@ -416,11 +416,11 @@
             "requests"
           ]
         },
-        "description": "Lo que recibió el WireMock: los SMS y PUSH (y los EMAIL si el correo real está apagado), incluidos los 503."
+        "description": "What the WireMock received: the SMS and PUSH (and the EMAIL when real email is off), including the 503s."
       }
     },
     {
-      "name": "9. DLQ: ver mensajes (sin sacarlos)",
+      "name": "9. DLQ: peek at the messages (without removing them)",
       "event": [
         {
           "listen": "test",
@@ -464,7 +464,7 @@
             "get"
           ]
         },
-        "description": "ack_requeue_true: los mensajes vuelven a la DLQ después de leerlos. Cada uno trae el header x-notification-error con la causa."
+        "description": "ack_requeue_true: the messages go back to the DLQ after being read. Each one carries the x-notification-error header with the cause."
       }
     }
   ],
