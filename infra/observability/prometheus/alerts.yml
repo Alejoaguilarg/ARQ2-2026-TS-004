@@ -1,0 +1,70 @@
+# Alert rules, evaluated by Prometheus every 15 s. Firing alerts are listed at http://localhost:9090/alerts and in
+# Grafana under Alerting > Alert rules. There is no Alertmanager: nothing is sent anywhere (no email or Slack).
+# Tested by alerts.test.yml: promtool test rules alerts.test.yml
+groups:
+  - name: finova-messaging
+    rules:
+      # spec.md §4.4: every message in a DLQ raises an alert.
+      - alert: MessagesInDeadLetterQueue
+        expr: |
+          sum by (queue) (rabbitmq_detailed_queue_messages{queue=~".*\\.dlq"}) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} message(s) in {{ $labels.queue }}"
+          description: "A message exhausted its retries. Inspect it in the RabbitMQ UI (http://localhost:15672) and look up its correlationId in Loki."
+
+  - name: finova-services
+    rules:
+      - alert: ServiceDown
+        expr: up{job="finova-services"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is down"
+          description: "Prometheus could not scrape /actuator/prometheus for 1 minute."
+
+      - alert: HighServerErrorRate
+        expr: |
+          sum by (instance) (rate(http_server_requests_seconds_count{job="finova-services", status=~"5.."}[5m]))
+            / sum by (instance) (rate(http_server_requests_seconds_count{job="finova-services"}[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }}: {{ $value | humanizePercentage }} of the requests end in 5xx"
+          description: "Errors in Grafana: Explore, Loki, {service=~\".+\"} |= \"ERROR\"."
+
+  - name: finova-security
+    rules:
+      # spec.md §3.1 "Redis unavailable": the Gateway fails closed, so every request is being refused.
+      - alert: SecurityStoreUnavailable
+        expr: |
+          sum(increase(finova_gateway_rejections_total{code=~"SECURITY_STORE_UNAVAILABLE|IDEMPOTENCY_STORE_UNAVAILABLE"}[2m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The Gateway cannot reach Redis and is answering 503"
+          description: "Requests are rejected (fail closed). Check the redis container."
+
+      # spec.md F1.3: a rotated refresh token presented again means it leaked; Identity revoked the session.
+      - alert: RefreshTokenReused
+        expr: |
+          sum(increase(finova_identity_security_events_total{event="refresh_reused"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A refresh token was reused: a session was revoked as possibly stolen"
+          description: "Identity logs it at WARN: {service=\"identity-service\"} |= \"Refresh token reused\"."
+
+      # The per-account lockout stops guessing one password; many failures across accounts look like credential stuffing.
+      - alert: LoginFailureSpike
+        expr: |
+          sum(increase(finova_identity_security_events_total{event="login_failed"}[5m])) > 20
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanize }} failed logins in 5 minutes"
+          description: "Possible credential stuffing. Failed logins: {service=\"identity-service\"} |= \"Login rejected\"."
