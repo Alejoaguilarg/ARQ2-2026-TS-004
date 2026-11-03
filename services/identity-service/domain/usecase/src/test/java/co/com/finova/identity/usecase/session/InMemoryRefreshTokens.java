@@ -37,6 +37,12 @@ class InMemoryRefreshTokens implements RefreshTokenRepository {
         tokens.replaceAll((hash, token) -> token.familyId().equals(familyId) ? with(token, RefreshToken.Status.REVOKED) : token);
     }
 
+    @Override
+    public boolean isFamilyRevoked(UUID familyId) {
+        return tokens.values().stream()
+                .anyMatch(token -> token.familyId().equals(familyId) && token.status() == RefreshToken.Status.REVOKED);
+    }
+
     RefreshToken byValue(String refreshToken) {
         return tokens.get(SessionTokens.hash(refreshToken));
     }
