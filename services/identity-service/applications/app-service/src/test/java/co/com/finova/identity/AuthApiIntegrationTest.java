@@ -90,6 +90,17 @@ class AuthApiIntegrationTest {
     }
 
     @Test
+    void anEmailBecomesTheUserIdOfTheSameUserTheWalletKnows() throws Exception {
+        HttpResponse<String> found = post("/users/lookup", "{\"email\":\"Beto@Example.com\"}");
+        assertThat(found.statusCode()).isEqualTo(200);
+        assertThat(JSON.readTree(found.body()).get("userId").asText()).isEqualTo("2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f");
+
+        HttpResponse<String> unknown = post("/users/lookup", "{\"email\":\"nadie@example.com\"}");
+        assertThat(unknown.statusCode()).isEqualTo(404);
+        assertThat(JSON.readTree(unknown.body()).get("code").asText()).isEqualTo("USER_NOT_FOUND");
+    }
+
+    @Test
     void f12_f13_refreshRotatesAndReuseRevokesTheSession() throws Exception {
         String device = "ios-" + UUID.randomUUID();
         JsonNode first = JSON.readTree(post("/auth/login", login("beto@example.com", "Finova2026!", device)).body());

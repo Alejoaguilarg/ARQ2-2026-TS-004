@@ -11,6 +11,7 @@ import co.com.finova.identity.usecase.session.FinancialSessionUseCase;
 import co.com.finova.identity.usecase.session.LoginUseCase;
 import co.com.finova.identity.usecase.session.RefreshSessionUseCase;
 import co.com.finova.identity.usecase.session.LogoutUseCase;
+import co.com.finova.identity.usecase.user.FindRecipientUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,7 @@ class UseCasesConfigTest {
             assertThat(context.getBean(LoginUseCase.class)).isNotNull();
             assertThat(context.getBean(FinancialSessionUseCase.class)).isNotNull();
             assertThat(context.getBean(RefreshSessionUseCase.class)).isNotNull();
+            assertThat(context.getBean(FindRecipientUseCase.class)).isNotNull();
         }
     }
 

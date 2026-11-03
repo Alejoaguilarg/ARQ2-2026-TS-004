@@ -424,6 +424,7 @@ Wallet operations are also idempotent per `transferId` (§4.7).
 | `POST /transfers` | 30 req/min per user | `429 RATE_LIMIT_EXCEEDED` |
 | `GET /wallets/me/balance` | 120 req/min per user | `429 RATE_LIMIT_EXCEEDED` |
 | `GET /transfers/{transferId}` | 120 req/min per user (status polling) | `429 RATE_LIMIT_EXCEEDED` |
+| `POST /users/lookup` | 30 req/min per user (so the user base cannot be walked by email) | `429 RATE_LIMIT_EXCEEDED` |
 
 `429` responses include `Retry-After`.
 
@@ -442,6 +443,7 @@ Wallet operations are also idempotent per `transferId` (§4.7).
 | GET | `/transfers/{transferId}` | Transfer | Bearer |
 | GET | `/audit/records` | Audit | Bearer, role `AUDITOR` |
 | GET | `/audit/verify` | Audit | Bearer, role `AUDITOR` |
+| POST | `/users/lookup` | Identity | Bearer |
 
 **Internal endpoint (not routed by the Gateway):** `GET /.well-known/jwks.json` on Identity. Authentication: none, reachable only inside the Docker network. Request body: none. Responses: `200` with the JSON Web Key Set (`{"keys":[{"kty":"RSA","kid":"2026-10","use":"sig","alg":"RS256","n":"...","e":"AQAB"}]}`); `500 INTERNAL_ERROR`. The Gateway caches the keys and refreshes them when it sees an unknown `kid`.
 
@@ -477,6 +479,7 @@ Every error response uses `ErrorResponse`:
 | `FORBIDDEN_ROLE` | 403 | Gateway | Role `AUDITOR` required |
 | `WALLET_NOT_FOUND` | 404 | Wallet | User has no wallet |
 | `TRANSFER_NOT_FOUND` | 404 | Transfer | Not found or not visible to the caller |
+| `USER_NOT_FOUND` | 404 | Identity | No active or locked user has that email |
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | Gateway | Same key still in progress |
 | `PAYLOAD_TOO_LARGE` | 413 | Gateway | Body of `POST /auth/login` or `POST /transfers` larger than 16 KB |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | Gateway / Transfer | Same key, different body |
@@ -841,6 +844,38 @@ Authorization: Bearer eyJhbGciOi...
 ```json
 200 OK
 { "valid": false, "checkedRecords": 10231, "firstInvalidSeq": 8812, "verifiedAt": "2026-10-19T16:00:00Z" }
+```
+
+### 3.12 `POST /users/lookup`
+
+- **Authentication:** Bearer.
+- **Request body:** `email` (string, email, ≤ 254, required). Matched case-insensitively.
+- **Behavior:** Identity answers the `userId` of the user with that email, so the app can ask the sender for the recipient's email and send `recipientUserId` to `POST /transfers`. Only the `userId` is returned: no status, roles or contact data. A `DISABLED` user is answered as `404`; a `LOCKED` user can still receive. The email travels in the body, not in the query, so it does not end up in access logs; Identity never logs it. The per-user rate limit (§3.1.2) stops the route from being used to enumerate users. Whether the recipient has a wallet is still checked by the saga (§4.7).
+- **Responses:**
+
+  | Status | Code / meaning |
+  |---|---|
+  | `200` | `{ "userId": "uuid" }` |
+  | `400` | `VALIDATION_ERROR` |
+  | `401` | `UNAUTHORIZED` / `TOKEN_REVOKED` |
+  | `404` | `USER_NOT_FOUND` |
+  | `429` | `RATE_LIMIT_EXCEEDED` |
+  | `500` | `INTERNAL_ERROR` |
+  | `502` / `504` | `UPSTREAM_UNAVAILABLE` |
+  | `503` | `SECURITY_STORE_UNAVAILABLE` |
+
+- **Example:**
+
+```http
+POST /users/lookup
+Authorization: Bearer eyJhbGciOi...
+Content-Type: application/json
+
+{ "email": "beto@example.com" }
+```
+```json
+200 OK
+{ "userId": "2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f" }
 ```
 
 ---

@@ -37,6 +37,10 @@ spring:
             uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
             predicates:
               - Path=/auth/**
+          - id: identity-users
+            uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+            predicates:
+              - Path=/users/**
           - id: wallet
             uri: ${WALLET_SERVICE_URI:http://localhost:8082}
             predicates:
