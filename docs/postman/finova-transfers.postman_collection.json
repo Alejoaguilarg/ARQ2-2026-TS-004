@@ -1,0 +1,818 @@
+{
+  "info": {
+    "name": "Finova - Transfers end to end",
+    "description": "The whole transfer flow through the Gateway, for the demo. Needs the whole system up (docker compose --profile apps up -d) and fresh demo data. Run it with the Collection Runner in order: each step reads the variables the previous one saved. The status requests repeat themselves every 0.5 s until the saga ends.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Ana sends 150,000.00 COP to Beto (F3, F4.1)",
+      "item": [
+        {
+          "name": "Login (ana)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "F1.1: access token for the demo user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana@example.com\",\n  \"password\": \"{{password}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"accessToken\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance before",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/wallets/me/balance",
+            "description": "F2.1: the balance, read from Redis."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"balanceBefore\", pm.response.json().available);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up with PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "description": "F1.6: one financial session per transfer intent (single use, 5 minutes).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"{{pin}}\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"financialSessionToken\", pm.response.json().financialSessionToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F3.2: 202 Accepted; the saga runs asynchronously.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{betoUserId}}\",\n  \"amount\": \"150000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"transferId\", body.transferId);",
+                  "pm.test(\"accepted as PENDING\", () => pm.expect(body.status).to.eql(\"PENDING\"));",
+                  "pm.test(\"Location of the transfer\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(body.transferId));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Same request again (the user retries)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F3.4: the Gateway replays the stored 202.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{betoUserId}}\",\n  \"amount\": \"150000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"replayed\", () => pm.expect(pm.response.headers.get(\"Idempotent-Replayed\")).to.eql(\"true\"));",
+                  "pm.test(\"same transfer\", () => pm.expect(pm.response.json().transferId).to.eql(pm.collectionVariables.get(\"transferId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Same key, another amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F3.5: 422 IDEMPOTENCY_KEY_REUSED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{betoUserId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"IDEMPOTENCY_KEY_REUSED\", () => pm.expect(pm.response.json().code).to.eql(\"IDEMPOTENCY_KEY_REUSED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer status (until COMPLETED)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers/{{transferId}}",
+            "description": "F4.1: PENDING -> DEBITED -> COMPLETED. Repeats every 0.5 s until the saga ends."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const polls = Number(pm.collectionVariables.get(\"polls\") || 0) + 1;",
+                  "if (![\"COMPLETED\", \"REJECTED\", \"REVERSED\"].includes(body.status) && polls < 40) {",
+                  "    pm.collectionVariables.set(\"polls\", polls);",
+                  "    postman.setNextRequest(\"Transfer status (until COMPLETED)\");",
+                  "} else {",
+                  "    pm.collectionVariables.set(\"polls\", 0);",
+                  "    pm.test(\"ends COMPLETED\", () => pm.expect(body.status).to.eql(\"COMPLETED\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance after",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/wallets/me/balance",
+            "description": "F2.5: one debit of 150,000.00."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const before = Number(pm.collectionVariables.get(\"balanceBefore\"));",
+                  "pm.test(\"150,000.00 less\", () => pm.expect(Number(pm.response.json().available)).to.eql(before - 150000));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Transfers that cannot complete (F4.2, F4.4)",
+      "item": [
+        {
+          "name": "Step-up with PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "description": "F1.6: one financial session per transfer intent (single use, 5 minutes).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"{{pin}}\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"financialSessionToken\", pm.response.json().financialSessionToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer more than the balance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F4.2: Wallet rejects the debit.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{betoUserId}}\",\n  \"amount\": \"9000000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"rejectedTransferId\", body.transferId);",
+                  "pm.test(\"accepted as PENDING\", () => pm.expect(body.status).to.eql(\"PENDING\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status (until REJECTED)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers/{{rejectedTransferId}}",
+            "description": "F4.2: no money moves."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const polls = Number(pm.collectionVariables.get(\"polls\") || 0) + 1;",
+                  "if (![\"COMPLETED\", \"REJECTED\", \"REVERSED\"].includes(body.status) && polls < 40) {",
+                  "    pm.collectionVariables.set(\"polls\", polls);",
+                  "    postman.setNextRequest(\"Status (until REJECTED)\");",
+                  "} else {",
+                  "    pm.collectionVariables.set(\"polls\", 0);",
+                  "    pm.test(\"ends REJECTED\", () => pm.expect(body.status).to.eql(\"REJECTED\"));",
+                  "    pm.test(\"INSUFFICIENT_FUNDS\", () => pm.expect(body.failureReason).to.eql(\"INSUFFICIENT_FUNDS\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step-up with PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/financial-session",
+            "description": "F1.6: one financial session per transfer intent (single use, 5 minutes).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"PIN\",\n  \"credential\": \"{{pin}}\",\n  \"scope\": \"transfer:create\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"financialSessionToken\", pm.response.json().financialSessionToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer to a user without wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Financial-Session",
+                "value": "{{financialSessionToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers",
+            "description": "F4.4: debit applied, credit fails, the debit is reversed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientUserId\": \"{{unknownUserId}}\",\n  \"amount\": \"1000.00\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"reversedTransferId\", body.transferId);",
+                  "pm.test(\"accepted as PENDING\", () => pm.expect(body.status).to.eql(\"PENDING\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status (until REVERSED)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/transfers/{{reversedTransferId}}",
+            "description": "F4.4: compensated automatically."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const polls = Number(pm.collectionVariables.get(\"polls\") || 0) + 1;",
+                  "if (![\"COMPLETED\", \"REJECTED\", \"REVERSED\"].includes(body.status) && polls < 40) {",
+                  "    pm.collectionVariables.set(\"polls\", polls);",
+                  "    postman.setNextRequest(\"Status (until REVERSED)\");",
+                  "} else {",
+                  "    pm.collectionVariables.set(\"polls\", 0);",
+                  "    pm.test(\"ends REVERSED\", () => pm.expect(body.status).to.eql(\"REVERSED\"));",
+                  "    pm.test(\"RECIPIENT_WALLET_NOT_FOUND\", () => pm.expect(body.failureReason).to.eql(\"RECIPIENT_WALLET_NOT_FOUND\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Audit (F5)",
+      "item": [
+        {
+          "name": "Login (auditor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "F1.1: access token for the demo user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"auditor@example.com\",\n  \"password\": \"{{password}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"auditorToken\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit trail of the first transfer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/audit/records?transferId={{transferId}}",
+            "description": "F5.6: every record of the transfer, Gateway duplicates included, ordered by seq."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const records = pm.response.json().items.map(r => r.source + \" \" + r.stage + \" \" + r.outcome);",
+                  "pm.test(\"accepted, replayed, debited, credited, completed\", () => {",
+                  "    pm.expect(records).to.include.members([\"TRANSFER REQUEST ACCEPTED\", \"GATEWAY REQUEST DUPLICATE\",",
+                  "        \"WALLET DEBIT APPLIED\", \"WALLET CREDIT APPLIED\", \"TRANSFER TRANSFER COMPLETED\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify the hash chain",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/audit/verify",
+            "description": "F5.5: valid while nobody altered a record."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"chain valid\", () => pm.expect(pm.response.json().valid).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit as Ana (not an auditor)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/audit/records?transferId={{transferId}}",
+            "description": "F5.7: 403 FORBIDDEN_ROLE."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"FORBIDDEN_ROLE\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN_ROLE\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "password",
+      "value": "Finova2026!"
+    },
+    {
+      "key": "pin",
+      "value": "4821"
+    },
+    {
+      "key": "deviceId",
+      "value": "postman-demo"
+    },
+    {
+      "key": "betoUserId",
+      "value": "2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f"
+    },
+    {
+      "key": "unknownUserId",
+      "value": "00000000-0000-4000-8000-000000000000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "auditorToken",
+      "value": ""
+    },
+    {
+      "key": "financialSessionToken",
+      "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "transferId",
+      "value": ""
+    },
+    {
+      "key": "rejectedTransferId",
+      "value": ""
+    },
+    {
+      "key": "reversedTransferId",
+      "value": ""
+    },
+    {
+      "key": "balanceBefore",
+      "value": ""
+    },
+    {
+      "key": "polls",
+      "value": "0"
+    }
+  ]
+}
