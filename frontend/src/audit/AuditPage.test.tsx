@@ -56,96 +56,96 @@ describe('AuditPage', () => {
   it('lists the last week in plain words and keeps the technical data folded', async () => {
     const api = backend({});
     await open();
-    expect(await screen.findByText('5 movimientos')).toBeInTheDocument();
+    expect(await screen.findByText('5 records')).toBeInTheDocument();
     const list = screen.getByRole('region', { name: 'Resultados' });
-    expect(within(list).getByText('Ana pidió enviar dinero')).toBeInTheDocument();
-    expect(within(list).getByText('Beto recibió el dinero')).toBeInTheDocument();
-    expect(within(list).getByText('Envío bloqueado: la confirmación con PIN venció')).toBeInTheDocument();
+    expect(within(list).getByText('Ana asked to send money')).toBeInTheDocument();
+    expect(within(list).getByText('Beto received the money')).toBeInTheDocument();
+    expect(within(list).getByText('Transfer blocked: the PIN confirmation expired')).toBeInTheDocument();
     expect(urls(api)[0]).toMatch(/from=.*&page=0&size=20/);
 
-    await user().click(within(list).getByText('Envío bloqueado: la confirmación con PIN venció'));
+    await user().click(within(list).getByText('Transfer blocked: the PIN confirmation expired'));
     const detail = screen.getByRole('complementary');
-    expect(within(detail).getByText('No se movió dinero.')).toBeInTheDocument();
+    expect(within(detail).getByText('No money moved.')).toBeInTheDocument();
     expect(within(detail).getByText('FINANCIAL_SESSION_EXPIRED')).not.toBeVisible();
-    expect(within(detail).getByRole('button', { name: 'Ver todo este envío' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'See this whole transfer' })).toBeDisabled();
   });
 
   it('opens a whole transfer from one of its records', async () => {
     const api = backend({});
     await open();
-    await user().click(await screen.findByText('Beto recibió el dinero'));
-    await user().click(screen.getByRole('button', { name: 'Ver todo este envío' }));
+    await user().click(await screen.findByText('Beto received the money'));
+    await user().click(screen.getByRole('button', { name: 'See this whole transfer' }));
     expect(urls(api).at(-1)).toBe(`/api/audit/records?transferId=${T1}&page=0&size=20`);
-    expect(screen.getByLabelText('Envío')).toHaveValue(T1);
+    expect(screen.getByLabelText('Transfer')).toHaveValue(T1);
   });
 
   it('checks the form before searching', async () => {
     const api = backend({});
     await open();
-    await screen.findByText('5 movimientos');
+    await screen.findByText('5 records');
     const u = user();
-    await u.clear(screen.getByLabelText('Desde'));
-    await u.click(screen.getByRole('button', { name: 'Buscar' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Elige un cliente, pega un envío o indica desde qué fecha buscar.');
+    await u.clear(screen.getByLabelText('From'));
+    await u.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose a customer, paste a transfer or give a start date.');
 
-    await u.type(screen.getByLabelText('Envío'), 'FN-A1B2C3D4');
-    await u.click(screen.getByRole('button', { name: 'Buscar' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Pega el identificador completo del envío');
+    await u.type(screen.getByLabelText('Transfer'), 'FN-A1B2C3D4');
+    await u.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Paste the full transfer identifier');
 
-    await u.clear(screen.getByLabelText('Envío'));
-    await u.selectOptions(screen.getByLabelText('Cliente'), 'Beto');
-    await u.click(screen.getByRole('button', { name: 'Buscar' }));
+    await u.clear(screen.getByLabelText('Transfer'));
+    await u.selectOptions(screen.getByLabelText('Customer'), 'Beto');
+    await u.click(screen.getByRole('button', { name: 'Search' }));
     expect(urls(api).at(-1)).toBe(`/api/audit/records?userId=${BETO}&page=0&size=20`);
   });
 
   it('pages through long results', async () => {
     const api = backend({ records: () => json(200, { page: 0, size: 20, total: 45, items: SAGA }) });
     await open();
-    expect(await screen.findByText('1 de 3')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Página anterior' })).toBeDisabled();
-    await user().click(screen.getByRole('button', { name: 'Página siguiente' }));
-    expect(await screen.findByText('2 de 3')).toBeInTheDocument();
+    expect(await screen.findByText('1 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    await user().click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByText('2 of 3')).toBeInTheDocument();
     expect(urls(api).at(-1)).toMatch(/page=1&size=20$/);
   });
 
   it('says whether the record is intact', async () => {
     backend({ verify: () => json(200, { valid: false, checkedRecords: 10231, firstInvalidSeq: 8812, verifiedAt: '' }) });
     await open();
-    await user().click(screen.getByRole('button', { name: 'Revisar ahora' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('El movimiento n.º 8.812 no coincide');
+    await user().click(screen.getByRole('button', { name: 'Check now' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Record no. 8,812 does not match');
   });
 
   it('confirms an intact record and explains a failed search', async () => {
     backend({ records: () => json(403, { code: 'FORBIDDEN_ROLE' }) });
     await open();
-    expect(await screen.findByRole('alert')).toHaveTextContent('solo para personal autorizado');
-    await user().click(screen.getByRole('button', { name: 'Revisar ahora' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Revisamos 10.231 movimientos y ninguno fue modificado.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('for authorized staff only');
+    await user().click(screen.getByRole('button', { name: 'Check now' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('We checked 10,231 records and none was changed.');
   });
 });
 
 describe('read', () => {
   it.each<[Partial<AuditRecord>, string]>([
-    [{ source: 'GATEWAY', outcome: 'DUPLICATE', reason: 'DUPLICATE_REPLAYED' }, 'Ana tocó enviar otra vez'],
-    [{ source: 'GATEWAY', outcome: 'FAILED' }, 'El servicio de envíos no respondió'],
-    [{ outcome: 'REJECTED', reason: 'SOMETHING_NEW' }, 'Envío bloqueado: no cumplió las reglas'],
-    [{ source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED', reason: 'INSUFFICIENT_FUNDS' }, 'Ana no tenía saldo suficiente'],
-    [{ source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED', reason: 'SENDER_WALLET_NOT_FOUND' }, 'Ana no tiene billetera'],
-    [{ source: 'WALLET', stage: 'CREDIT', outcome: 'FAILED', reason: 'RECIPIENT_WALLET_NOT_FOUND' }, 'El destinatario no tiene billetera'],
-    [{ source: 'WALLET', stage: 'CREDIT', outcome: 'FAILED', reason: 'TRANSFER_REVERSED' }, 'Abono tardío descartado'],
-    [{ stage: 'CREDIT', outcome: 'FAILED', reason: 'CREDIT_TIMEOUT' }, 'El abono no respondió a tiempo'],
-    [{ source: 'WALLET', stage: 'REVERSAL', outcome: 'APPLIED' }, 'Se le devolvió el dinero a Ana'],
-    [{ source: 'WALLET', stage: 'REVERSAL', outcome: 'REJECTED', reason: 'ALREADY_CREDITED' }, 'Devolución no necesaria'],
-    [{ stage: 'TRANSFER', outcome: 'REJECTED' }, 'Envío rechazado'],
-    [{ stage: 'TRANSFER', outcome: 'COMPENSATED' }, 'Envío devuelto'],
-    [{ source: 'WALLET', stage: 'TRANSFER', outcome: 'ACCEPTED' }, 'Movimiento registrado'],
-    [{ outcome: 'ACCEPTED', userId: null }, 'Sin sesión pidió enviar dinero'],
-    [{ outcome: 'ACCEPTED', userId: '99999999-0000-4000-8000-000000000000' }, 'Cliente 99999999 pidió enviar dinero'],
+    [{ source: 'GATEWAY', outcome: 'DUPLICATE', reason: 'DUPLICATE_REPLAYED' }, 'Ana tapped send again'],
+    [{ source: 'GATEWAY', outcome: 'FAILED' }, 'The transfer service did not answer'],
+    [{ outcome: 'REJECTED', reason: 'SOMETHING_NEW' }, 'Transfer blocked: it broke the rules'],
+    [{ source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED', reason: 'INSUFFICIENT_FUNDS' }, 'Ana did not have enough balance'],
+    [{ source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED', reason: 'SENDER_WALLET_NOT_FOUND' }, 'Ana has no wallet'],
+    [{ source: 'WALLET', stage: 'CREDIT', outcome: 'FAILED', reason: 'RECIPIENT_WALLET_NOT_FOUND' }, 'The recipient has no wallet'],
+    [{ source: 'WALLET', stage: 'CREDIT', outcome: 'FAILED', reason: 'TRANSFER_REVERSED' }, 'Late credit discarded'],
+    [{ stage: 'CREDIT', outcome: 'FAILED', reason: 'CREDIT_TIMEOUT' }, 'The credit did not answer in time'],
+    [{ source: 'WALLET', stage: 'REVERSAL', outcome: 'APPLIED' }, 'The money was returned to Ana'],
+    [{ source: 'WALLET', stage: 'REVERSAL', outcome: 'REJECTED', reason: 'ALREADY_CREDITED' }, 'Refund not needed'],
+    [{ stage: 'TRANSFER', outcome: 'REJECTED' }, 'Transfer rejected'],
+    [{ stage: 'TRANSFER', outcome: 'COMPENSATED' }, 'Transfer returned'],
+    [{ source: 'WALLET', stage: 'TRANSFER', outcome: 'ACCEPTED' }, 'Record stored'],
+    [{ outcome: 'ACCEPTED', userId: null }, 'No session asked to send money'],
+    [{ outcome: 'ACCEPTED', userId: '99999999-0000-4000-8000-000000000000' }, 'Customer 99999999 asked to send money'],
   ])('reads %j', (over, what) => expect(read(record(1, over)).what).toBe(what));
 
   it('tells a blocked request from a rejected one', () => {
-    expect(read(record(1, { source: 'GATEWAY', outcome: 'REJECTED' })).badge).toBe('Bloqueado');
-    expect(read(record(1, { source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED' })).badge).toBe('Rechazado');
+    expect(read(record(1, { source: 'GATEWAY', outcome: 'REJECTED' })).badge).toBe('Blocked');
+    expect(read(record(1, { source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED' })).badge).toBe('Rejected');
   });
 
   it('turns a day into its bounds and ignores anything else', () => {

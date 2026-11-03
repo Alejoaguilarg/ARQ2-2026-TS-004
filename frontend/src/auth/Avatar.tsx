@@ -41,10 +41,10 @@ export function Avatar({ focus, emailLength, showPassword, mood }: Props) {
   const mouth = mood !== 'idle' ? MOUTHS[mood] : covering ? MOUTHS.covered : focus === 'email' ? MOUTHS.typing : MOUTHS.idle;
   const left = covering ? (peeking ? [16, -56] : [18, -100]) : [0, 0];
   const right = covering ? [-18, -100] : mood === 'ok' ? [16, -150] : [0, 0];
-  const label = mood === 'ok' ? 'El asistente celebra'
-    : mood === 'fail' ? 'El asistente niega con la cabeza'
-      : covering && !peeking ? 'El asistente se tapa los ojos'
-        : peeking ? 'El asistente espía con un ojo' : 'El asistente te mira';
+  const label = mood === 'ok' ? 'The assistant celebrates'
+    : mood === 'fail' ? 'The assistant shakes its head'
+      : covering && !peeking ? 'The assistant covers its eyes'
+        : peeking ? 'The assistant peeks with one eye' : 'The assistant is watching you';
 
   return (
     <svg className={`avatar avatar-${mood}`} width="168" height="168" viewBox="0 0 240 240" role="img" aria-label={label}>

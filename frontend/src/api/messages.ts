@@ -1,6 +1,6 @@
 import type { ApiError } from './client';
 
-// What the customer reads for each error (the "Mensajes al cliente" board of the design): plain words and a next
+// What the customer reads for each error (the "Customer messages" board of the design): plain words and a next
 // step, never a code. The support reference is the start of the correlationId, enough to find the request in Loki.
 export interface FriendlyMessage {
   title: string;
@@ -14,54 +14,54 @@ export function supportReference(error: Pick<ApiError, 'correlationId'>): string
 export function friendly(error: ApiError): FriendlyMessage {
   switch (error.code) {
     case 'INVALID_CREDENTIALS':
-      return { title: 'Correo o contraseña incorrectos', text: 'Revisa tus datos. Tras 5 intentos fallidos el ingreso se pausa 15 minutos.' };
+      return { title: 'Wrong email or password', text: 'Check your details. After 5 failed attempts, sign-in pauses for 15 minutes.' };
     case 'ACCOUNT_LOCKED':
-      return { title: 'Ingreso en pausa por tu seguridad', text: 'Hubo varios intentos fallidos. Vuelve a intentarlo en 15 minutos.' };
+      return { title: 'Sign-in paused for your security', text: 'There were several failed attempts. Try again in 15 minutes.' };
     case 'RATE_LIMIT_EXCEEDED':
       return {
-        title: 'Vas muy rápido',
+        title: 'You are going too fast',
         text: error.retryAfterSeconds
-          ? `Espera ${error.retryAfterSeconds} segundos y vuelve a intentarlo.`
-          : 'Espera un momento y vuelve a intentarlo.',
+          ? `Wait ${error.retryAfterSeconds} seconds and try again.`
+          : 'Wait a moment and try again.',
       };
     case 'SECURITY_STORE_UNAVAILABLE':
     case 'IDEMPOTENCY_STORE_UNAVAILABLE':
-      return { title: 'Estamos haciendo mantenimiento', text: 'Vuelve a intentarlo en unos minutos. Tu dinero está seguro.' };
+      return { title: 'We are doing maintenance', text: 'Try again in a few minutes. Your money is safe.' };
     case 'UPSTREAM_UNAVAILABLE':
     case 'NETWORK_ERROR':
-      return { title: 'No pudimos conectarnos', text: 'Revisa tu conexión a internet e inténtalo de nuevo.' };
+      return { title: 'We could not connect', text: 'Check your internet connection and try again.' };
     case 'VALIDATION_ERROR':
-      return { title: 'Revisa los datos', text: 'Algún dato no tiene el formato esperado.' };
+      return { title: 'Check the details', text: 'Some detail is not in the expected format.' };
     case 'STEP_UP_FAILED':
-      return { title: 'PIN incorrecto', text: 'Revísalo e inténtalo de nuevo. Tu envío sigue guardado.' };
+      return { title: 'Wrong PIN', text: 'Check it and try again. Your transfer is still saved.' };
     case 'STEP_UP_LOCKED':
-      return { title: 'Confirmación en pausa', text: 'Por tu seguridad, espera 15 minutos antes de volver a intentarlo.' };
+      return { title: 'Confirmation paused', text: 'For your security, wait 15 minutes before trying again.' };
     case 'FINANCIAL_SESSION_REQUIRED':
     case 'FINANCIAL_SESSION_INVALID':
     case 'FINANCIAL_SESSION_EXPIRED':
     case 'FINANCIAL_SESSION_USED':
-      return { title: 'Confirma de nuevo con tu PIN', text: 'Pasó un rato desde tu última confirmación. Solo te tomará un segundo.' };
+      return { title: 'Confirm again with your PIN', text: 'A while has passed since your last confirmation. It only takes a second.' };
     case 'SELF_TRANSFER_NOT_ALLOWED':
-      return { title: 'No puedes enviarte dinero a ti mismo', text: 'Elige a otra persona para continuar.' };
+      return { title: 'You cannot send money to yourself', text: 'Choose someone else to continue.' };
     case 'IDEMPOTENCY_IN_PROGRESS':
-      return { title: 'Tu envío ya va en camino', text: 'No hace falta tocar de nuevo. Espera un momento.' };
+      return { title: 'Your transfer is already on its way', text: 'No need to tap again. Wait a moment.' };
     case 'IDEMPOTENCY_KEY_REUSED':
-      return { title: 'Cambiaste los datos del envío', text: 'Para enviarlo así, empieza un envío nuevo.' };
+      return { title: 'You changed the transfer details', text: 'To send it like this, start a new transfer.' };
     case 'USER_NOT_FOUND':
-      return { title: 'No encontramos esa cuenta', text: 'No hay una cuenta Finova con ese correo. Revisa que esté bien escrito.' };
+      return { title: 'We could not find that account', text: 'There is no Finova account with that email. Check that it is spelled right.' };
     case 'WALLET_NOT_FOUND':
-      return { title: 'Tu cuenta aún no está lista', text: 'Estamos terminando de configurarla. Te avisaremos cuando puedas enviar.' };
+      return { title: 'Your account is not ready yet', text: 'We are finishing setting it up. We will let you know when you can send.' };
     case 'TRANSFER_NOT_FOUND':
-      return { title: 'No encontramos ese envío', text: 'Puede que ya no esté disponible. Revisa tu lista de envíos.' };
+      return { title: 'We could not find that transfer', text: 'It may no longer be available. Check your list of transfers.' };
     case 'FORBIDDEN_ROLE':
-      return { title: 'Esta sección es solo para personal autorizado', text: 'Si crees que deberías tener acceso, habla con tu administrador.' };
+      return { title: 'This section is for authorized staff only', text: 'If you think you should have access, talk to your administrator.' };
     default: {
       const reference = supportReference(error);
       return {
-        title: 'Algo salió mal de nuestro lado',
+        title: 'Something went wrong on our side',
         text: reference
-          ? `Si vuelve a pasar, escríbenos y menciona la referencia ${reference}.`
-          : 'Si vuelve a pasar, escríbenos.',
+          ? `If it happens again, write to us and mention the reference ${reference}.`
+          : 'If it happens again, write to us.',
       };
     }
   }

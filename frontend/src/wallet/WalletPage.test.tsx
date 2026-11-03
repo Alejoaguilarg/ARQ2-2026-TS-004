@@ -40,11 +40,11 @@ async function open() {
 }
 
 async function fillSend(user: ReturnType<typeof userEvent.setup>, email = 'beto@example.com') {
-  await user.click(await screen.findByRole('button', { name: 'Enviar dinero' }));
-  await user.type(screen.getByLabelText('Correo de quien recibe'), email);
-  await user.type(screen.getByLabelText('Monto en pesos'), '150000');
-  await user.type(screen.getByLabelText('Descripción (opcional)'), 'Cena');
-  await user.click(screen.getByRole('button', { name: 'Continuar' }));
+  await user.click(await screen.findByRole('button', { name: 'Send money' }));
+  await user.type(screen.getByLabelText('Recipient email'), email);
+  await user.type(screen.getByLabelText('Amount in pesos'), '150000');
+  await user.type(screen.getByLabelText('Description (optional)'), 'Cena');
+  await user.click(screen.getByRole('button', { name: 'Continue' }));
 }
 
 describe('WalletPage', () => {
@@ -66,23 +66,23 @@ describe('WalletPage', () => {
     });
     const user = userEvent.setup();
     await open();
-    expect(await screen.findByText(/500\.000,00/)).toBeInTheDocument();
-    expect(screen.getByText('Aún no has hecho envíos. Cuando hagas uno, lo sigues desde aquí.')).toBeInTheDocument();
+    expect(await screen.findByText(/500,000\.00/)).toBeInTheDocument();
+    expect(screen.getByText('No transfers yet. When you make one, follow it from here.')).toBeInTheDocument();
 
     await fillSend(user);
-    expect(await screen.findByRole('heading', { name: 'Confirma con tu PIN' })).toBeInTheDocument();
-    expect(screen.getByText('Cuenta de ejemplo: tu PIN es 4821.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Confirm with your PIN' })).toBeInTheDocument();
+    expect(screen.getByText('Example account: your PIN is 4821.')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('PIN de 4 dígitos'), '0000');
-    await user.click(screen.getByRole('button', { name: 'Confirmar y enviar' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('PIN incorrecto');
+    await user.type(screen.getByLabelText('4-digit PIN'), '0000');
+    await user.click(screen.getByRole('button', { name: 'Confirm and send' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Wrong PIN');
 
-    await user.type(screen.getByLabelText('PIN de 4 dígitos'), '4821');
-    await user.click(screen.getByRole('button', { name: 'Confirmar y enviar' }));
+    await user.type(screen.getByLabelText('4-digit PIN'), '4821');
+    await user.click(screen.getByRole('button', { name: 'Confirm and send' }));
 
-    expect(await screen.findByText('Listo. Beto ya recibió el dinero.')).toBeInTheDocument();
+    expect(await screen.findByText('Done. Beto received the money.')).toBeInTheDocument();
     expect(screen.getByText('FN-A1B2C3D4')).toBeInTheDocument();
-    expect(await screen.findByText(/350\.000,00/)).toBeInTheDocument();
+    expect(await screen.findByText(/350,000\.00/)).toBeInTheDocument();
 
     const [send] = api.calls('/api/transfers');
     const headers = send.init.headers as Record<string, string>;
@@ -91,8 +91,8 @@ describe('WalletPage', () => {
     expect(JSON.parse(String(send.init.body))).toEqual({ recipientUserId: BETO, amount: '150000.00', currency: 'COP', description: 'Cena' });
     expect(api.calls('/api/users/lookup')[0].init.body).toBe(JSON.stringify({ email: 'beto@example.com' }));
 
-    await user.click(screen.getByRole('button', { name: 'Listo' }));
-    expect(screen.getByRole('button', { name: /Beto.*Completado/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.getByRole('button', { name: /Beto.*Completed/ })).toBeInTheDocument();
   });
 
   it('retries a send whose answer was lost with the same key and confirmation, without a new PIN', async () => {
@@ -107,14 +107,14 @@ describe('WalletPage', () => {
     const user = userEvent.setup();
     await open();
     await fillSend(user);
-    await user.type(await screen.findByLabelText('PIN de 4 dígitos'), '4821');
-    await user.click(screen.getByRole('button', { name: 'Confirmar y enviar' }));
+    await user.type(await screen.findByLabelText('4-digit PIN'), '4821');
+    await user.click(screen.getByRole('button', { name: 'Confirm and send' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No supimos si tu envío salió');
-    expect(screen.queryByLabelText('PIN de 4 dígitos')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Intentar de nuevo' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('We do not know whether your transfer went out');
+    expect(screen.queryByLabelText('4-digit PIN')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
 
-    expect(await screen.findByText('No se pudo completar. Tu dinero ya está de vuelta en tu billetera.')).toBeInTheDocument();
+    expect(await screen.findByText('It could not be completed. Your money is back in your wallet.')).toBeInTheDocument();
     const [first, second] = api.calls('/api/transfers').map((c) => c.init.headers as Record<string, string>);
     expect(second['Idempotency-Key']).toBe(first['Idempotency-Key']);
     expect(second['X-Financial-Session']).toBe('fs_1');
@@ -133,13 +133,13 @@ describe('WalletPage', () => {
     const user = userEvent.setup();
     await open();
     await fillSend(user);
-    await user.type(await screen.findByLabelText('PIN de 4 dígitos'), '4821');
-    await user.click(screen.getByRole('button', { name: 'Confirmar y enviar' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Confirma de nuevo con tu PIN');
+    await user.type(await screen.findByLabelText('4-digit PIN'), '4821');
+    await user.click(screen.getByRole('button', { name: 'Confirm and send' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Confirm again with your PIN');
 
-    await user.type(screen.getByLabelText('PIN de 4 dígitos'), '4821');
-    await user.click(screen.getByRole('button', { name: 'Confirmar y enviar' }));
-    expect(await screen.findByText('Listo. Beto ya recibió el dinero.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('4-digit PIN'), '4821');
+    await user.click(screen.getByRole('button', { name: 'Confirm and send' }));
+    expect(await screen.findByText('Done. Beto received the money.')).toBeInTheDocument();
     const [first, second] = api.calls('/api/transfers').map((c) => c.init.headers as Record<string, string>);
     expect(second['Idempotency-Key']).toBe(first['Idempotency-Key']);
     expect(second['X-Financial-Session']).toBe('fs_2');
@@ -153,23 +153,23 @@ describe('WalletPage', () => {
     const user = userEvent.setup();
     await open();
     await fillSend(user, 'nadie@example.com');
-    expect(await screen.findByText('No encontramos una cuenta Finova con ese correo.')).toBeInTheDocument();
+    expect(await screen.findByText('We could not find a Finova account with that email.')).toBeInTheDocument();
 
-    const email = screen.getByLabelText('Correo de quien recibe');
+    const email = screen.getByLabelText('Recipient email');
     await user.clear(email);
     await user.type(email, 'ANA@example.com');
-    expect(screen.getByText('Ese correo es el tuyo.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Continuar' })).toBeDisabled();
+    expect(screen.getByText('That email is yours.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
 
-    await user.clear(screen.getByLabelText('Monto en pesos'));
-    await user.type(screen.getByLabelText('Monto en pesos'), '1.234');
-    expect(screen.getByText('Escribe un monto mayor a 0 con máximo 2 decimales.')).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Amount in pesos'));
+    await user.type(screen.getByLabelText('Amount in pesos'), '1.234');
+    expect(screen.getByText('Enter an amount greater than 0 with at most 2 decimals.')).toBeInTheDocument();
   });
 
   it('explains a wallet that is not ready and keeps sending off', async () => {
     backend({ '/api/wallets/me/balance': [() => json(404, { code: 'WALLET_NOT_FOUND' })] });
     await open();
-    expect(await screen.findByRole('alert')).toHaveTextContent('Tu cuenta aún no está lista');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar dinero' })).toBeDisabled());
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your account is not ready yet');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send money' })).toBeDisabled());
   });
 });
