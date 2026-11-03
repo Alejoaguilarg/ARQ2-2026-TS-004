@@ -1,0 +1,497 @@
+{
+  "info": {
+    "name": "Finova - Notification Service",
+    "description": "Publica los eventos de resultado de transferencia (spec §4.4) en el exchange transfer.events a través de la API HTTP de RabbitMQ, para probar el Notification Service sin depender de Transfer.\n\nVariables: los valores iniciales apuntan al RabbitMQ local del docker-compose (consola en localhost:15672, vhost %2F = '/', usuario finova). Para CloudAMQP cambia el *Current value* de rabbitUrl, vhost, rabbitUser y rabbitPassword. Las contraseñas van solo en Current value: Postman no exporta ese valor, así que no se sube al repo.\n\nPara repetir las pruebas desde cero: TRUNCATE notification_log (ver README).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{rabbitUser}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{rabbitPassword}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Health del servicio",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Notification Service is UP', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().status).to.eql('UP');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{serviceUrl}}/actuator/health",
+          "host": [
+            "{{serviceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "El servicio debe estar corriendo (IntelliJ o Docker) y conectado a la base y a RabbitMQ."
+      }
+    },
+    {
+      "name": "1. TransferCompleted: Ana le transfiere a Beto",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000001\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.completed\",\n  \"payload\": \"{\\n  \\\"messageId\\\": \\\"11111111-0000-4000-8000-000000000001\\\",\\n  \\\"type\\\": \\\"TransferCompleted\\\",\\n  \\\"correlationId\\\": \\\"5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e11\\\",\\n  \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567801\\\",\\n  \\\"producer\\\": \\\"transfer-service\\\",\\n  \\\"occurredAt\\\": \\\"2026-11-02T15:00:00Z\\\",\\n  \\\"payload\\\": {\\n    \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567801\\\",\\n    \\\"senderUserId\\\": \\\"7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c\\\",\\n    \\\"recipientUserId\\\": \\\"2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f\\\",\\n    \\\"amount\\\": \\\"150000.00\\\",\\n    \\\"currency\\\": \\\"COP\\\",\\n    \\\"completedAt\\\": \\\"2026-11-02T15:00:00Z\\\"\\n  }\\n}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "Spec §4.9: avisa a Ana y a Beto por su canal preferido (EMAIL). notification_log: 2 filas SENT."
+      }
+    },
+    {
+      "name": "2. TransferCompleted repetido (no reenvía)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000001\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.completed\",\n  \"payload\": \"{\\n  \\\"messageId\\\": \\\"11111111-0000-4000-8000-000000000001\\\",\\n  \\\"type\\\": \\\"TransferCompleted\\\",\\n  \\\"correlationId\\\": \\\"5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e11\\\",\\n  \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567801\\\",\\n  \\\"producer\\\": \\\"transfer-service\\\",\\n  \\\"occurredAt\\\": \\\"2026-11-02T15:00:00Z\\\",\\n  \\\"payload\\\": {\\n    \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567801\\\",\\n    \\\"senderUserId\\\": \\\"7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c\\\",\\n    \\\"recipientUserId\\\": \\\"2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f\\\",\\n    \\\"amount\\\": \\\"150000.00\\\",\\n    \\\"currency\\\": \\\"COP\\\",\\n    \\\"completedAt\\\": \\\"2026-11-02T15:00:00Z\\\"\\n  }\\n}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "El mismo evento otra vez (entrega at-least-once). Una notificación SENT nunca se reenvía: no llega ningún correo nuevo."
+      }
+    },
+    {
+      "name": "3. TransferRejected: fondos insuficientes",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000002\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.rejected\",\n  \"payload\": \"{\\n  \\\"messageId\\\": \\\"11111111-0000-4000-8000-000000000002\\\",\\n  \\\"type\\\": \\\"TransferRejected\\\",\\n  \\\"correlationId\\\": \\\"5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e12\\\",\\n  \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567802\\\",\\n  \\\"producer\\\": \\\"transfer-service\\\",\\n  \\\"occurredAt\\\": \\\"2026-11-02T15:05:00Z\\\",\\n  \\\"payload\\\": {\\n    \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567802\\\",\\n    \\\"senderUserId\\\": \\\"7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c\\\",\\n    \\\"recipientUserId\\\": \\\"2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f\\\",\\n    \\\"amount\\\": \\\"9000000.00\\\",\\n    \\\"currency\\\": \\\"COP\\\",\\n    \\\"reason\\\": \\\"INSUFFICIENT_FUNDS\\\"\\n  }\\n}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "Spec §4.9: solo avisa a Ana, con el motivo."
+      }
+    },
+    {
+      "name": "4. TransferReversed: compensación",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000003\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.reversed\",\n  \"payload\": \"{\\n  \\\"messageId\\\": \\\"11111111-0000-4000-8000-000000000003\\\",\\n  \\\"type\\\": \\\"TransferReversed\\\",\\n  \\\"correlationId\\\": \\\"5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e13\\\",\\n  \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567803\\\",\\n  \\\"producer\\\": \\\"transfer-service\\\",\\n  \\\"occurredAt\\\": \\\"2026-11-02T15:10:00Z\\\",\\n  \\\"payload\\\": {\\n    \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567803\\\",\\n    \\\"senderUserId\\\": \\\"7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c\\\",\\n    \\\"recipientUserId\\\": \\\"2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f\\\",\\n    \\\"amount\\\": \\\"50000.00\\\",\\n    \\\"currency\\\": \\\"COP\\\",\\n    \\\"reason\\\": \\\"CREDIT_TIMEOUT\\\"\\n  }\\n}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "Spec §4.9: solo avisa a Ana; el dinero fue devuelto."
+      }
+    },
+    {
+      "name": "5. TransferCompleted por SMS y PUSH",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000004\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.completed\",\n  \"payload\": \"{\\n  \\\"messageId\\\": \\\"11111111-0000-4000-8000-000000000004\\\",\\n  \\\"type\\\": \\\"TransferCompleted\\\",\\n  \\\"correlationId\\\": \\\"5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e14\\\",\\n  \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567804\\\",\\n  \\\"producer\\\": \\\"transfer-service\\\",\\n  \\\"occurredAt\\\": \\\"2026-11-02T15:15:00Z\\\",\\n  \\\"payload\\\": {\\n    \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567804\\\",\\n    \\\"senderUserId\\\": \\\"6a1f3c2e-8b4d-4e5f-9a7b-1c2d3e4f5a60\\\",\\n    \\\"recipientUserId\\\": \\\"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a\\\",\\n    \\\"amount\\\": \\\"20000.00\\\",\\n    \\\"currency\\\": \\\"COP\\\",\\n    \\\"completedAt\\\": \\\"2026-11-02T15:15:00Z\\\"\\n  }\\n}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "Usuarios de demo con canal SMS y PUSH: van al simulador del proveedor, no llega correo."
+      }
+    },
+    {
+      "name": "6. TransferCompleted con proveedor caído (reintentos y DLQ)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000005\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.completed\",\n  \"payload\": \"{\\n  \\\"messageId\\\": \\\"11111111-0000-4000-8000-000000000005\\\",\\n  \\\"type\\\": \\\"TransferCompleted\\\",\\n  \\\"correlationId\\\": \\\"5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e15\\\",\\n  \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567805\\\",\\n  \\\"producer\\\": \\\"transfer-service\\\",\\n  \\\"occurredAt\\\": \\\"2026-11-02T15:20:00Z\\\",\\n  \\\"payload\\\": {\\n    \\\"transferId\\\": \\\"a1b2c3d4-e5f6-4890-abcd-ef1234567805\\\",\\n    \\\"senderUserId\\\": \\\"7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c\\\",\\n    \\\"recipientUserId\\\": \\\"0f1e2d3c-4b5a-4968-8776-5a4b3c2d1e0f\\\",\\n    \\\"amount\\\": \\\"10000.00\\\",\\n    \\\"currency\\\": \\\"COP\\\",\\n    \\\"completedAt\\\": \\\"2026-11-02T15:20:00Z\\\"\\n  }\\n}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "Ana recibe su correo una vez. El usuario 'falla' recibe 503 del simulador: se reintenta cada 5 s, y tras 3 reintentos (4 intentos) el mensaje queda en notification.transfer-events.q.dlq."
+      }
+    },
+    {
+      "name": "7. Mensaje inválido (directo a la DLQ)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('RabbitMQ accepted and routed the message to a queue', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"properties\": {\n    \"content_type\": \"application/json\",\n    \"message_id\": \"11111111-0000-4000-8000-000000000006\",\n    \"delivery_mode\": 2\n  },\n  \"routing_key\": \"transfer.completed\",\n  \"payload\": \"TransferCompleted{transferId='a1b2c3d4-e5f6-4890-abcd-ef1234567806', senderUserId=null, recipientUserId=null, amount='10000.00'}\",\n  \"payload_encoding\": \"string\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/exchanges/{{vhost}}/transfer.events/publish",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "exchanges",
+            "{{vhost}}",
+            "transfer.events",
+            "publish"
+          ]
+        },
+        "description": "Lo que hoy publica Transfer con toString(): no es JSON. No se reintenta: va directo a la DLQ con INVALID_MESSAGE."
+      }
+    },
+    {
+      "name": "8. Simulador: peticiones recibidas",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{providerUrl}}/__admin/requests",
+          "host": [
+            "{{providerUrl}}"
+          ],
+          "path": [
+            "__admin",
+            "requests"
+          ]
+        },
+        "description": "Lo que recibió el WireMock: los SMS y PUSH (y los EMAIL si el correo real está apagado), incluidos los 503."
+      }
+    },
+    {
+      "name": "9. DLQ: ver mensajes (sin sacarlos)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Read the DLQ', function () { pm.response.to.have.status(200); });",
+              "const messages = pm.response.json();",
+              "messages.forEach(m => console.log(m.properties.message_id, '->', (m.properties.headers || {})['x-notification-error']));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"count\": 10,\n  \"ackmode\": \"ack_requeue_true\",\n  \"encoding\": \"auto\",\n  \"truncate\": 50000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{rabbitUrl}}/api/queues/{{vhost}}/notification.transfer-events.q.dlq/get",
+          "host": [
+            "{{rabbitUrl}}"
+          ],
+          "path": [
+            "api",
+            "queues",
+            "{{vhost}}",
+            "notification.transfer-events.q.dlq",
+            "get"
+          ]
+        },
+        "description": "ack_requeue_true: los mensajes vuelven a la DLQ después de leerlos. Cada uno trae el header x-notification-error con la causa."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "rabbitUrl",
+      "value": "http://localhost:15672"
+    },
+    {
+      "key": "vhost",
+      "value": "%2F"
+    },
+    {
+      "key": "rabbitUser",
+      "value": "finova"
+    },
+    {
+      "key": "rabbitPassword",
+      "value": "finova"
+    },
+    {
+      "key": "serviceUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "providerUrl",
+      "value": "http://localhost:8089"
+    }
+  ]
+}

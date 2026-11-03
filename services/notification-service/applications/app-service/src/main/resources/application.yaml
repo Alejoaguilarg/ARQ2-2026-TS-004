@@ -1,0 +1,85 @@
+# Defaults for running locally (IntelliJ). Every value can be overridden with an environment
+# variable: spring.rabbitmq.host -> SPRING_RABBITMQ_HOST, adapters.email.enabled -> ADAPTERS_EMAIL_ENABLED...
+# In Docker Compose the variables come from docker-compose.yml (x-app-env + notification-service).
+# Credentials never go in this file: the repository is public.
+server:
+  port: 8080
+spring:
+  application:
+    name: "notification-service"
+  datasource:
+    url: "jdbc:postgresql://localhost:5432/notification_db"
+    username: "notification"
+    password: "notification"
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; Hibernate only checks that the entities match it
+      ddl-auto: "validate"
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: "localhost"
+    port: 5672
+    username: "guest"
+    password: "guest"
+    virtual-host: "/"
+    ssl:
+      enabled: false
+    # Confirms are used when a message is moved to the DLQ
+    publisher-confirm-type: "correlated"
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: "manual"
+        default-requeue-rejected: false
+        prefetch: 10
+        concurrency: 1
+  mail:
+    # host, port, username and password come from SPRING_MAIL_* variables (only when ADAPTERS_EMAIL_ENABLED=true)
+    default-encoding: "UTF-8"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+adapters:
+  rabbitmq:
+    queue: "notification.transfer-events.q"
+    dead-letter-queue: "notification.transfer-events.q.dlq"
+    max-retries: 3
+    confirm-timeout: "5s"
+  notification-provider:
+    base-url: "${NOTIFICATION_PROVIDER_URI:http://localhost:8089}"
+    connect-timeout: "2s"
+    read-timeout: "5s"
+  email:
+    enabled: false
+    from: "${spring.mail.username:}"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,prometheus"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    # Otherwise every healthcheck (every 10 s in Docker) would open an SMTP connection to Gmail
+    mail:
+      enabled: false
+
+logging:
+  pattern:
+    # correlationId and transferId in every log line (spec §1.4)
+    level: "%5p [correlationId=%X{correlationId:-} transferId=%X{transferId:-}]"

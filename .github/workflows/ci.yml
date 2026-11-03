@@ -35,6 +35,7 @@ jobs:
             wallet-service: [services/wallet-service/**, .github/workflows/ci.yml, .github/scripts/**]
             transfer-service: [services/transfer-service/**, .github/workflows/ci.yml, .github/scripts/**]
             audit-service: [services/audit-service/**, .github/workflows/ci.yml, .github/scripts/**]
+            notification-service: [services/notification-service/**, .github/workflows/ci.yml, .github/scripts/**]
 
   build:
     needs: changes
