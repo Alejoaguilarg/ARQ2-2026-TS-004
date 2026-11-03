@@ -58,6 +58,10 @@ public class TransferSaga {
             return;
         }
 
+        Transfer transfer = new Transfer(transferId, senderUserId, recipientUserId,
+            amount, currency, idempotencyKey, requestHash, correlationId);
+        transferRepository.save(transfer);
+
         processedMessageRepository.save(transferId, "transfer-service");
 
         Instant now = Instant.now();
@@ -94,11 +98,18 @@ public class TransferSaga {
 
         Instant now = Instant.now();
 
+        Transfer transfer = transferRepository.findByTransferId(event.getTransferId())
+            .orElseThrow(() -> new IllegalStateException("Transfer not found: " + event.getTransferId()));
+        transfer.setStatus(TransferStatus.DEBITED.name());
+        transfer.setLastCommandAt(now);
+        transfer.setUpdatedAt(now);
+        transferRepository.save(transfer);
+
         OutboxMessage creditMsg = new OutboxMessage(
             UUID.randomUUID().toString(), "wallet.commands", "credit",
             serialize(new CreditWallet(
-                event.getTransferId(), event.getUserId(),
-                event.getAmount(), "COP", 1
+                event.getTransferId(), transfer.getRecipientUserId(),
+                event.getAmount(), transfer.getCurrency(), 1
             )),
             now, null,
             "CreditWallet", null, event.getTransferId(), "transfer-service", now
