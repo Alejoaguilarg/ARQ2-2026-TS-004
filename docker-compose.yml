@@ -187,6 +187,8 @@ services:
       SPRING_MAIL_PORT: "${NOTIFICATION_SMTP_PORT:-587}"
       SPRING_MAIL_USERNAME: ${NOTIFICATION_SMTP_USER:-}
       SPRING_MAIL_PASSWORD: ${NOTIFICATION_SMTP_PASSWORD:-}
+      # Demo inbox: every email goes to this one address (the demo users have example.com addresses)
+      ADAPTERS_EMAIL_REDIRECT_TO: ${NOTIFICATION_DEMO_INBOX:-}
     healthcheck: *app-healthcheck
     depends_on:
       notification-db: { condition: service_healthy }

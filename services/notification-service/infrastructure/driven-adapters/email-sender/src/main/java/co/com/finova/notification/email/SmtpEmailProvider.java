@@ -16,10 +16,20 @@ public class SmtpEmailProvider implements NotificationProvider {
 
     private final JavaMailSender mailSender;
     private final String from;
+    private final String redirectTo;
 
     public SmtpEmailProvider(JavaMailSender mailSender, String from) {
+        this(mailSender, from, null);
+    }
+
+    /**
+     * @param redirectTo demo inbox that receives every email (the demo users have example.com addresses,
+     *                   which receive nothing); null or blank sends to the real recipient
+     */
+    public SmtpEmailProvider(JavaMailSender mailSender, String from, String redirectTo) {
         this.mailSender = mailSender;
         this.from = from;
+        this.redirectTo = redirectTo == null || redirectTo.isBlank() ? null : redirectTo.trim();
     }
 
     @Override
@@ -30,9 +40,14 @@ public class SmtpEmailProvider implements NotificationProvider {
         }
         SimpleMailMessage email = new SimpleMailMessage();
         email.setFrom(from);
-        email.setTo(notification.to());
+        if (redirectTo == null) {
+            email.setTo(notification.to());
+            email.setText(notification.message());
+        } else {
+            email.setTo(redirectTo);
+            email.setText(notification.message() + "\n\n(Demo inbox: this email was for " + notification.to() + ")");
+        }
         email.setSubject(notification.subject());
-        email.setText(notification.message());
         try {
             mailSender.send(email);
         } catch (MailException e) {

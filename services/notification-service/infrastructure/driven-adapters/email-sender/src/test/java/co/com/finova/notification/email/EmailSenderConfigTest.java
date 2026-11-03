@@ -14,15 +14,15 @@ class EmailSenderConfigTest {
 
     @Test
     void createsTheSmtpProviderWithTheSender() {
-        assertThat(config.smtpEmailProvider(mailSender, new EmailProperties(true, "notificaciones@finova.test")))
+        assertThat(config.smtpEmailProvider(mailSender, new EmailProperties(true, "notifications@finova.test", null)))
                 .isNotNull();
     }
 
     @Test
     void requiresASenderAddress() {
         assertThatIllegalStateException()
-                .isThrownBy(() -> config.smtpEmailProvider(mailSender, new EmailProperties(true, " ")));
+                .isThrownBy(() -> config.smtpEmailProvider(mailSender, new EmailProperties(true, " ", null)));
         assertThatIllegalStateException()
-                .isThrownBy(() -> config.smtpEmailProvider(mailSender, new EmailProperties(true, null)));
+                .isThrownBy(() -> config.smtpEmailProvider(mailSender, new EmailProperties(true, null, null)));
     }
 }

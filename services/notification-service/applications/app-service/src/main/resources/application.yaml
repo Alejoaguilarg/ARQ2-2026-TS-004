@@ -64,6 +64,8 @@ adapters:
   email:
     enabled: false
     from: "${spring.mail.username:}"
+    # Demo inbox: every email goes to this address (ADAPTERS_EMAIL_REDIRECT_TO). Empty: the real recipient.
+    redirect-to: ""
 
 management:
   endpoints:
