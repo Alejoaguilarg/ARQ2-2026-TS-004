@@ -18,5 +18,7 @@ include ':gateway-filters'
 project(':gateway-filters').projectDir = file('./infrastructure/entry-points/gateway-filters')
 include ':redis'
 project(':redis').projectDir = file('./infrastructure/driven-adapters/redis')
+include ':rabbitmq-publisher'
+project(':rabbitmq-publisher').projectDir = file('./infrastructure/driven-adapters/rabbitmq-publisher')
 include ':jwt'
 project(':jwt').projectDir = file('./infrastructure/driven-adapters/jwt')
