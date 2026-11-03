@@ -34,7 +34,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new Rule("POST", Pattern.compile("/auth/financial-session"), "financial-session", 10, false),
             new Rule("POST", Pattern.compile("/transfers"), "transfers", 30, false),
             new Rule("GET", Pattern.compile("/wallets/me/balance"), "balance", 120, false),
-            new Rule("GET", Pattern.compile("/transfers/[^/]+"), "transfer-status", 120, false));
+            new Rule("GET", Pattern.compile("/transfers/[^/]+"), "transfer-status", 120, false),
+            // Low on purpose: each call answers whether an email has an account (spec.md §3.12).
+            new Rule("POST", Pattern.compile("/users/lookup"), "user-lookup", 30, false));
 
     private static final System.Logger LOG = System.getLogger(RateLimitFilter.class.getName());
 

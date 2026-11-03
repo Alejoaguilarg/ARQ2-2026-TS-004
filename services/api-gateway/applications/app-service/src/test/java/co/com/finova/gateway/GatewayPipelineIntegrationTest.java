@@ -211,6 +211,21 @@ class GatewayPipelineIntegrationTest {
     }
 
     @Test
+    void recipientLookupNeedsATokenAndIsRoutedToIdentity() throws Exception {
+        String body = "{\"email\":\"beto@example.com\"}";
+        HttpResponse<String> anonymous = send(HttpRequest.newBuilder(uri("/users/lookup"))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)));
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+
+        // Identity is a closed port in this test: 502 means the route exists and reached it (no route would be 404).
+        HttpResponse<String> routed = send(HttpRequest.newBuilder(uri("/users/lookup"))
+                .header("Authorization", "Bearer " + accessToken(UUID.randomUUID().toString()))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)));
+        assertThat(routed.statusCode()).isEqualTo(502);
+        assertThat(routed.body()).contains("UPSTREAM_UNAVAILABLE");
+    }
+
+    @Test
     void upstreamReceivesTheIdentityFromTheTokenNotFromTheClient() throws Exception {
         HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/wallets/me/balance"))
                 .header("Authorization", "Bearer " + accessToken(UUID.randomUUID().toString()))

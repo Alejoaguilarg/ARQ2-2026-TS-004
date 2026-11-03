@@ -75,6 +75,17 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void recipientLookupAllows30PerMinutePerUser() throws Exception {
+        for (int i = 0; i < 30; i++) {
+            assertThat(send(userRequest("POST", "/users/lookup", "u1")).getStatus()).isEqualTo(200);
+        }
+
+        assertThat(send(userRequest("POST", "/users/lookup", "u1")).getStatus()).isEqualTo(429);
+        assertThat(send(userRequest("POST", "/users/lookup", "u2")).getStatus()).isEqualTo(200);
+        assertThat(counters.values).containsKey("rl:user-lookup:u1");
+    }
+
+    @Test
     void routesWithoutARuleAreNotCounted() throws Exception {
         send(userRequest("GET", "/audit/records", "u1"));
 
