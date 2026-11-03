@@ -191,6 +191,16 @@ class AuthApiIntegrationTest {
                 .containsPattern("finova_identity_security_events_total\\{event=\"step_up_failed\"\\} [1-9]");
     }
 
+    @Test
+    void theCountersBehindTheAlertsExistAtZeroBeforeTheFirstEvent() throws Exception {
+        String metrics = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/actuator/prometheus")).build(), HttpResponse.BodyHandlers.ofString()).body();
+
+        // No test locks an account, so this one is still at its initial 0.
+        assertThat(metrics).contains("finova_identity_security_events_total{event=\"account_locked\"} 0.0")
+                .contains("finova_identity_security_events_total{event=\"refresh_reused\"}");
+    }
+
     private HttpResponse<String> stepUp(String accessToken, String method, String credential) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/auth/financial-session"))

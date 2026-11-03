@@ -152,6 +152,13 @@ class GatewayPipelineIntegrationTest {
         assertThat(metrics()).containsPattern("finova_gateway_rejections_total\\{code=\"UNAUTHORIZED\",status=\"401\"\\} [1-9]");
     }
 
+    @Test
+    void theCountersBehindTheAlertsExistAtZeroBeforeTheFirstEvent() throws Exception {
+        assertThat(metrics())
+                .contains("finova_gateway_rejections_total{code=\"IDEMPOTENCY_STORE_UNAVAILABLE\",status=\"503\"} 0.0")
+                .contains("finova_gateway_rejections_total{code=\"SECURITY_STORE_UNAVAILABLE\",status=\"503\"} 0.0");
+    }
+
     private String metrics() throws Exception {
         return send(HttpRequest.newBuilder(uri("/actuator/prometheus")).GET()).body();
     }

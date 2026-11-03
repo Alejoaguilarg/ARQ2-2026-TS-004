@@ -43,7 +43,8 @@ class GatewayMetricsTest {
         String key = "3f1e9a7c-5b2d-4c8e-9f0a-1b2c3d4e5f60";
 
         filter.doFilter(transfer(key), new MockHttpServletResponse(), (req, res) -> ((HttpServletResponse) res).setStatus(202));
-        assertThat(registry.find(IdempotencyFilter.REPLAYS).counter()).isNull();
+        // Registered at 0 on start, so the first replay is a visible increase (see IdempotencyFilter).
+        assertThat(registry.get(IdempotencyFilter.REPLAYS).counter().count()).isZero();
 
         filter.doFilter(transfer(key), new MockHttpServletResponse(), (req, res) -> ((HttpServletResponse) res).setStatus(202));
         assertThat(registry.get(IdempotencyFilter.REPLAYS).counter().count()).isEqualTo(1);

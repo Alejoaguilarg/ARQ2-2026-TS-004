@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -160,6 +161,14 @@ public class AuthController {
     ResponseEntity<Object> internalError(RuntimeException e, HttpServletRequest request) {
         LOG.log(System.Logger.Level.ERROR, "Unexpected error", e);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error.", request);
+    }
+
+    static final List<String> SECURITY_EVENT_NAMES = List.of("login_failed", "account_locked", "refresh_reused", "step_up_failed");
+
+    // Registered at 0 on start: a counter born at 1 has no earlier sample, so increase() reads 0 and the first
+    // event after a restart would never fire RefreshTokenReused.
+    static {
+        SECURITY_EVENT_NAMES.forEach(event -> Metrics.counter(SECURITY_EVENTS, "event", event));
     }
 
     // finova_identity_security_events_total{event}: the same rejections as the WARN logs, for alerts and panels.
