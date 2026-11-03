@@ -5,6 +5,7 @@ import co.com.finova.transfer.model.outbox.gateways.OutboxRepository;
 import co.com.finova.transfer.model.processedmessage.gateways.ProcessedMessageRepository;
 import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.createtransfer.CreateTransferUseCase;
+import co.com.finova.transfer.usecase.gettransfer.GetTransferUseCase;
 import co.com.finova.transfer.usecase.handlewalletresult.HandleWalletResultUseCase;
 import co.com.finova.transfer.usecase.saga.SagaOutbox;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class UseCasesConfigTest {
         try (var context = new AnnotationConfigApplicationContext(Ports.class)) {
             assertThat(context.getBean(CreateTransferUseCase.class)).isNotNull();
             assertThat(context.getBean(HandleWalletResultUseCase.class)).isNotNull();
+            assertThat(context.getBean(GetTransferUseCase.class)).isNotNull();
             assertThat(context.getBean(SagaOutbox.class)).isNotNull();
             assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
         }
