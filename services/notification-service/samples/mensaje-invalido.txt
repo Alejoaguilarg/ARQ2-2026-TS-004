@@ -1,0 +1,1 @@
+TransferCompleted{transferId='a1b2c3d4-e5f6-4890-abcd-ef1234567806', senderUserId=null, recipientUserId=null, amount='10000.00'}

@@ -1,0 +1,33 @@
+apply plugin: 'org.springframework.boot'
+
+dependencies {
+	testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation project(':model')
+    implementation project(':usecase')
+    implementation project(':rabbitmq-listener')
+    implementation project(':jpa-repository')
+    implementation project(':rest-consumer')
+    implementation project(':email-sender')
+    implementation 'org.springframework.boot:spring-boot-starter'
+    // No business endpoints: the web server only serves /actuator/health (Docker healthcheck) and /actuator/prometheus
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    runtimeOnly('org.springframework.boot:spring-boot-devtools')
+    testImplementation 'com.tngtech.archunit:archunit:1.3.0'
+}
+
+tasks.register('explodedJar', Copy) {
+    with jar
+    into layout.buildDirectory.dir("exploded")
+}
+
+jar {
+    // To disable the *-plain.jar
+    enabled = false
+}
+
+bootJar {
+    // Sets output jar name
+    archiveFileName = "${project.getParent().getName()}.${archiveExtension.get()}"
+}

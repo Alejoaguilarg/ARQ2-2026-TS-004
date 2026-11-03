@@ -1,0 +1,4 @@
+# Keep Unix line endings in scripts that run inside Linux containers (Docker build)
+gradlew text eol=lf
+*.sh text eol=lf
+gradlew.bat text eol=crlf

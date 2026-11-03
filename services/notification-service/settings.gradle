@@ -1,0 +1,24 @@
+pluginManagement {
+    repositories {
+        //mavenLocal()
+        //maven { url '...' }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'notification-service'
+
+include ':app-service'
+include ':model'
+include ':usecase'
+project(':app-service').projectDir = file('./applications/app-service')
+project(':model').projectDir = file('./domain/model')
+project(':usecase').projectDir = file('./domain/usecase')
+include ':rabbitmq-listener'
+project(':rabbitmq-listener').projectDir = file('./infrastructure/entry-points/rabbitmq-listener')
+include ':jpa-repository'
+project(':jpa-repository').projectDir = file('./infrastructure/driven-adapters/jpa-repository')
+include ':rest-consumer'
+project(':rest-consumer').projectDir = file('./infrastructure/driven-adapters/rest-consumer')
+include ':email-sender'
+project(':email-sender').projectDir = file('./infrastructure/driven-adapters/email-sender')
