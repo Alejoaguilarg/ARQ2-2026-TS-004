@@ -13,6 +13,7 @@ public class OutboxMessage {
     private String correlationId;
     private String transferId;
     private String producer;
+    private Instant occurredAt;
 
     public OutboxMessage() {
     }
