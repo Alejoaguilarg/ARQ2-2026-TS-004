@@ -41,6 +41,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final System.Logger LOG = System.getLogger(RateLimitFilter.class.getName());
 
     private final RateLimitUseCase rateLimit;
+    private final ClientAddress clients;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -48,9 +49,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         Optional<Rule> rule = RULES.stream()
                 .filter(r -> r.method().equals(request.getMethod()) && r.path().matcher(RequestPaths.of(request)).matches())
                 .findFirst();
-        // The Gateway is the edge, so the socket address is the client; X-Forwarded-For would be client-controlled.
+        // The socket address, or the X-Real-IP of the trusted web proxy (ClientAddress); never X-Forwarded-For.
         Object subject = rule.isEmpty() ? null
-                : rule.get().perClientIp() ? request.getRemoteAddr() : request.getAttribute(AuthenticatedUser.ATTRIBUTE);
+                : rule.get().perClientIp() ? clients.of(request) : request.getAttribute(AuthenticatedUser.ATTRIBUTE);
         if (subject == null) {
             // No rule, or a user route without a user: authentication rejects it.
             chain.doFilter(request, response);
