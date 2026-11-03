@@ -82,3 +82,40 @@ Every message carries `correlationId` and `transferId` in its envelope (spec.md 
 Write one integration test that sends a request with `X-Correlation-Id`, captures the output with Spring Boot's
 `OutputCaptureExtension`, and asserts that the log line contains `[<id>]`. `AuthApiIntegrationTest` in Identity
 and `GatewayPipelineIntegrationTest` in the Gateway are examples.
+
+## Alerts
+
+Rules in `infra/observability/prometheus/alerts.yml`, evaluated by Prometheus every 15 s. There is no Alertmanager:
+alerts are shown, not sent (no email or Slack).
+
+- Prometheus: http://localhost:9090/alerts (state of every rule: inactive, pending, firing)
+- Grafana: **Alerting** → **Alert rules** (Prometheus rules are listed under the Prometheus data source)
+
+| Alert | Fires when | Severity |
+|---|---|---|
+| `MessagesInDeadLetterQueue` | Any `*.dlq` queue has a message (spec.md §4.4) | critical |
+| `ServiceDown` | A service does not answer `/actuator/prometheus` for 1 minute | critical |
+| `HighServerErrorRate` | More than 5% of a service's requests end in 5xx for 5 minutes | warning |
+| `SecurityStoreUnavailable` | The Gateway answered 503 because Redis is unreachable (fail closed) | critical |
+| `RefreshTokenReused` | Identity revoked a session because a rotated refresh token came back (spec.md F1.3) | warning |
+| `LoginFailureSpike` | More than 20 failed logins in 5 minutes, across all accounts | warning |
+
+`ServiceDown` fires for every service that is not running, so with only the Gateway and Identity up the others show as
+down. That is expected until the whole system runs with `--profile apps`.
+
+### Metrics behind the security alerts
+
+| Metric | Service | Labels |
+|---|---|---|
+| `finova_gateway_rejections_total` | Gateway | `code` (the ErrorResponse code, e.g. `TOKEN_REVOKED`, `RATE_LIMIT_EXCEEDED`), `status` |
+| `finova_gateway_idempotent_replays_total` | Gateway | none: retries answered from Redis without calling Transfer |
+| `finova_identity_security_events_total` | Identity | `event`: `login_failed`, `account_locked`, `refresh_reused`, `step_up_failed` |
+
+### Testing the rules
+
+`alerts.test.yml` feeds made-up series to each rule and checks when it fires and when it does not:
+
+```bash
+cd infra/observability/prometheus
+docker run --rm -v "$PWD":/w -w /w --entrypoint promtool prom/prometheus:v3.5.0 test rules alerts.test.yml
+```
