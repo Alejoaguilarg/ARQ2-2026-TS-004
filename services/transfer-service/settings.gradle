@@ -1,0 +1,28 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'transfer-service'
+
+include ':app-service'
+include ':model'
+include ':usecase'
+project(':app-service').projectDir = file('./applications/app-service')
+project(':model').projectDir = file('./domain/model')
+project(':usecase').projectDir = file('./domain/usecase')
+include ':api-rest'
+project(':api-rest').projectDir = file('./infrastructure/entry-points/api-rest')
+include ':jpa-repository'
+project(':jpa-repository').projectDir = file('./infrastructure/driven-adapters/jpa-repository')
+include ':rabbitmq-publisher'
+project(':rabbitmq-publisher').projectDir = file('./infrastructure/driven-adapters/rabbitmq-publisher')
+include ':message-json'
+project(':message-json').projectDir = file('./infrastructure/helpers/message-json')
+include ':rabbitmq-consumer'
+project(':rabbitmq-consumer').projectDir = file('./infrastructure/entry-points/rabbitmq-consumer')
+include ':outbox-relay'
+project(':outbox-relay').projectDir = file('./infrastructure/entry-points/outbox-relay')
+include ':saga-sweeper'
+project(':saga-sweeper').projectDir = file('./infrastructure/entry-points/saga-sweeper')
