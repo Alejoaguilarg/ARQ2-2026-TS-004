@@ -1,62 +1,62 @@
 # Notification Service — Finova
 
-Envía las notificaciones de resultado de cada transferencia (push, email o SMS) a través del proveedor externo. Nunca está en el camino crítico: si se cae, las transferencias siguen y los eventos esperan en la cola (spec F5.8).
+Sends the outcome of every transfer to the users (push, email or SMS) through the external provider. It is never in the critical path: if it goes down, transfers keep working and the events wait in the queue (spec F5.8).
 
-Contrato: `docs/spec.md` §1.1, §2 (`RecipientContact`, `NotificationLog`), §4.2–§4.5 y §4.9.
+Contract: `docs/spec.md` §1.1, §2 (`RecipientContact`, `NotificationLog`), §4.2–§4.5 and §4.9.
 
-## Qué hace
+## What it does
 
-| Evento (publicado por Transfer) | A quién avisa (§4.9) |
+| Event (published by Transfer) | Who is notified (§4.9) |
 |---|---|
-| `TransferCompleted` | Al que envía y al que recibe |
-| `TransferRejected` | Al que envía |
-| `TransferReversed` | Al que envía |
+| `TransferCompleted` | Sender and recipient |
+| `TransferRejected` | Sender |
+| `TransferReversed` | Sender |
 
-1. Consume `notification.transfer-events.q` (exchange `transfer.events`).
-2. Por cada usuario a notificar:
-   - si su notificación ya está `SENT`, la salta;
-   - busca su contacto en `recipient_contacts`;
-   - envía por su `preferredChannel`;
-   - guarda el resultado en `notification_log` (`SENT` o `FAILED`, `attempts + 1`).
-3. Hace ack, o pide reintento si algo falló.
+1. Consumes `notification.transfer-events.q` (exchange `transfer.events`).
+2. For each user to notify:
+    - skips it if its notification is already `SENT`;
+    - looks up the contact in `recipient_contacts`;
+    - sends through the user's `preferredChannel`;
+    - stores the result in `notification_log` (`SENT` or `FAILED`, `attempts + 1`).
+3. Acks the message, or asks for a retry if something failed.
 
-| Situación | Qué pasa con el mensaje |
+| Situation | What happens to the message |
 |---|---|
-| Todo enviado | ack |
-| Proveedor caído, timeout o error | reject → `.retry` (5 s) → vuelve a la cola. Después de 3 reintentos (4 intentos en total) → DLQ |
-| JSON inválido, sin envelope, tipo desconocido o campos faltantes | directo a la DLQ |
-| Usuario sin contacto, o sin dato para su canal | directo a la DLQ |
+| Everything sent | ack |
+| Provider down, timeout or error answer | reject → `.retry` (5 s) → back to the queue. After 3 retries (4 attempts in total) → DLQ |
+| Invalid JSON, no envelope, unknown type or missing fields | straight to the DLQ |
+| User without contact data, or without an address for its channel | straight to the DLQ |
 
-El mensaje que va a la DLQ lleva el header `x-notification-error` con la causa.
+A message moved to the DLQ carries the header `x-notification-error` with the cause.
 
-## Arquitectura (hexagonal, estructura Bancolombia como los demás servicios)
+## Architecture (hexagonal, same Bancolombia layout as the other services)
 
-| Módulo | Contenido |
+| Module | Contents |
 |---|---|
-| `domain/model` | `TransferOutcome`, `RecipientContact`, `NotificationLog`, `Notification`, `NotificationMessages` y los puertos: `RecipientContactRepository`, `NotificationLogRepository`, `NotificationProvider` |
-| `domain/usecase` | `NotifyTransferOutcomeUseCase`: la regla de negocio, sin Spring |
-| `infrastructure/entry-points/rabbitmq-listener` | Adaptador de entrada: consume la cola, ack, reintentos y DLQ |
-| `infrastructure/driven-adapters/jpa-repository` | PostgreSQL (`notification_db`) y migraciones Flyway |
-| `infrastructure/driven-adapters/rest-consumer` | Proveedor HTTP: `POST /push`, `/email`, `/sms` (WireMock en la Ola 2) |
-| `infrastructure/driven-adapters/email-sender` | Correo real por SMTP (opcional, apagado por defecto) |
-| `applications/app-service` | `MainApplication`, configuración y composición de los adaptadores |
+| `domain/model` | `TransferOutcome`, `RecipientContact`, `NotificationLog`, `Notification`, `NotificationMessages` and the ports: `RecipientContactRepository`, `NotificationLogRepository`, `NotificationProvider` |
+| `domain/usecase` | `NotifyTransferOutcomeUseCase`: the business rules, without Spring |
+| `infrastructure/entry-points/rabbitmq-listener` | Driving adapter: consumes the queue, ack, retries and DLQ |
+| `infrastructure/driven-adapters/jpa-repository` | PostgreSQL (`notification_db`) and Flyway migrations |
+| `infrastructure/driven-adapters/rest-consumer` | HTTP provider: `POST /push`, `/email`, `/sms` (WireMock in Wave 2) |
+| `infrastructure/driven-adapters/email-sender` | Real email through SMTP (optional, off by default) |
+| `applications/app-service` | `MainApplication`, configuration and composition of the adapters |
 
-`NotificationProviderConfig` decide qué adaptador usa cada canal. Por defecto, todos los canales van al proveedor HTTP. Con `ADAPTERS_EMAIL_ENABLED=true`, EMAIL va por SMTP y PUSH/SMS siguen yendo al proveedor HTTP. El caso de uso no cambia en ningún caso.
+`NotificationProviderConfig` picks the adapter for each channel. By default every channel goes to the HTTP provider. With `ADAPTERS_EMAIL_ENABLED=true`, EMAIL goes through SMTP and PUSH/SMS keep going to the HTTP provider. The use case never changes.
 
-`ArchitectureTest` (ArchUnit) verifica que el dominio no dependa de frameworks ni de adaptadores.
+`ArchitectureTest` (ArchUnit) checks that the domain depends on neither frameworks nor adapters.
 
-## Decisiones que el spec no define
+## Design decisions (not defined by the spec)
 
-1. **Primero se envía, después se registra,** sin dejar una transacción abierta mientras responde el proveedor. Si el servicio se cae justo entre los dos pasos, ese usuario puede recibir la notificación dos veces (entrega at-least-once). Para mitigarlo, al proveedor se le envía `Idempotency-Key: notificationId`.
-2. **Contacto inexistente, o sin dato para su canal** → DLQ. No se intenta por otro canal, porque el spec no define un canal alterno.
-3. **"3 reintentos" = 4 intentos en total.**
-4. **Cuerpo enviado al proveedor:** `{notificationId, channel, to, subject, message, eventType, transferId, amount, currency, reason}`.
+1. **Send first, record afterwards,** without keeping a transaction open while the provider answers. If the service stops between both steps, that user may receive the notification twice (at-least-once delivery). To mitigate it, the provider receives `Idempotency-Key: notificationId`.
+2. **Missing contact, or no address for its channel** → DLQ. No other channel is tried, because the spec defines no fallback channel.
+3. **"3 retries" = 4 attempts in total.**
+4. **Body sent to the provider:** `{notificationId, channel, to, subject, message, eventType, transferId, amount, currency, reason}`.
 
-## Correr en local
+## Run locally (IntelliJ)
 
-Requisitos: JDK 21, Docker Desktop y la rama con el `docker-compose.yml` del equipo.
+Requirements: JDK 21, Docker Desktop and a branch with the team's `docker-compose.yml`.
 
-**1. Base de datos y simulador del proveedor.** En la raíz del repo, crea un `docker-compose.override.yml` (no se sube: agrégalo a `.git/info/exclude`):
+**1. Database and provider mock.** At the repo root, create a `docker-compose.override.yml` (not committed: add it to `.git/info/exclude`):
 
 ```yaml
 services:
@@ -68,79 +68,79 @@ services:
       - "127.0.0.1:8089:8080"
 ```
 
-Luego levántalos:
+Then start them:
 
 ```
 docker compose up -d notification-db notification-provider-mock
 ```
 
-**2. Variables de entorno en IntelliJ** (Run → Edit Configurations → `MainApplication` → Environment variables), para usar el RabbitMQ de CloudAMQP:
+**2. Environment variables in IntelliJ** (Run → Edit Configurations → run configuration of `MainApplication` → Environment variables), to use the CloudAMQP broker:
 
 ```
-SPRING_RABBITMQ_HOST=<host de CloudAMQP>
+SPRING_RABBITMQ_HOST=<CloudAMQP host>
 SPRING_RABBITMQ_PORT=5671
 SPRING_RABBITMQ_SSL_ENABLED=true
 SPRING_RABBITMQ_VIRTUAL_HOST=<vhost>
-SPRING_RABBITMQ_USERNAME=<usuario>
-SPRING_RABBITMQ_PASSWORD=<contraseña>
+SPRING_RABBITMQ_USERNAME=<user>
+SPRING_RABBITMQ_PASSWORD=<password>
 ```
 
-La base de datos (`localhost:5432`, usuario `notification`) y el proveedor (`http://localhost:8089`) ya están como valores por defecto en `application.yaml`.
+The database (`localhost:5432`, user `notification`) and the provider (`http://localhost:8089`) are already the defaults in `application.yaml`.
 
-**3. Arrancar `MainApplication`.** Flyway crea las tablas y carga los contactos de ejemplo. Para comprobarlo:
+**3. Start `MainApplication`.** Flyway creates the tables and loads the demo contacts. To check:
 
 ```
 docker compose exec notification-db psql -U notification -d notification_db -c "select email, preferred_channel from recipient_contacts;"
 ```
 
-## Correo real (Gmail)
+## Real email (Gmail)
 
-1. En una cuenta Gmail de pruebas: activa la verificación en 2 pasos y crea una **contraseña de aplicación**.
-2. Agrega estas variables en IntelliJ:
+1. In a test Gmail account: turn on 2-Step Verification and create an **app password**.
+2. Add these variables in IntelliJ:
 
 ```
 ADAPTERS_EMAIL_ENABLED=true
 SPRING_MAIL_HOST=smtp.gmail.com
 SPRING_MAIL_PORT=587
-SPRING_MAIL_USERNAME=<tu cuenta de pruebas>@gmail.com
-SPRING_MAIL_PASSWORD=<contraseña de aplicación>
+SPRING_MAIL_USERNAME=<test account>@gmail.com
+SPRING_MAIL_PASSWORD=<app password>
 ```
 
-3. Apunta a Ana y a Beto (los usuarios de demo de Identity) a tu bandeja, **solo en tu base local** (el repo es público). Gmail entrega `cuenta+algo@gmail.com` en la misma bandeja:
+3. Point Ana and Beto (Identity's demo users) to your inbox, **only in your local database** (the repo is public). Gmail delivers `account+anything@gmail.com` to the same inbox:
 
 ```sql
-UPDATE recipient_contacts SET email = '<cuenta>+ana@gmail.com'  WHERE user_id = '7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c';
-UPDATE recipient_contacts SET email = '<cuenta>+beto@gmail.com' WHERE user_id = '2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f';
+UPDATE recipient_contacts SET email = '<account>+ana@gmail.com'  WHERE user_id = '7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c';
+UPDATE recipient_contacts SET email = '<account>+beto@gmail.com' WHERE user_id = '2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f';
 ```
 
-Si cambias `R__seed_recipient_contacts.sql`, Flyway lo vuelve a ejecutar y restaura los correos de ejemplo.
+If `R__seed_recipient_contacts.sql` changes, Flyway runs it again and restores the demo emails.
 
-## Probar sin Transfer: mensajes de ejemplo
+## Test without Transfer: sample messages
 
-**Con Postman (recomendado):** importa `postman/notification-service.postman_collection.json`. Publica cada mensaje de `samples/` en `transfer.events` usando la API HTTP de RabbitMQ y verifica que quedó enrutado a una cola. Se puede correr todo seguido con el *Collection Runner*.
+**With Postman (recommended):** import `postman/notification-service.postman_collection.json`. It publishes each message in `samples/` to `transfer.events` through the RabbitMQ HTTP API and checks that it was routed to a queue. Run everything at once with the *Collection Runner*.
 
-- Los valores iniciales de las variables apuntan al RabbitMQ local del compose (`http://localhost:15672`, vhost `%2F`, usuario `finova`).
-- Para CloudAMQP, cambia el **Current value** de `rabbitUrl` (`https://<host de CloudAMQP>`), `vhost`, `rabbitUser` y `rabbitPassword`. Postman no exporta el *Current value*, así que la contraseña no termina en el repo.
-- Para repetir las pruebas desde cero:
+- The variables default to the local broker of the compose (`http://localhost:15672`, vhost `%2F`, user `finova`).
+- For CloudAMQP, change `rabbitUrl` (`https://<CloudAMQP host>`), `vhost`, `rabbitUser` and `rabbitPassword` in the collection's **Variables** tab. Values you type stay local to your Postman unless you share them, so the password never reaches the repo.
+- To repeat the tests from scratch:
   ```
   docker compose exec notification-db psql -U notification -d notification_db -c "TRUNCATE notification_log;"
   ```
 
-**A mano:** en la consola de RabbitMQ: **Exchanges → `transfer.events` → Publish message**.
-- **Routing key:** `transfer.completed`, `transfer.rejected` o `transfer.reversed`.
-- **Properties:** `content_type` = `application/json`, `message_id` = el `messageId` del archivo.
-- **Payload:** el contenido del archivo de `samples/`.
+**By hand:** in the RabbitMQ console, **Exchanges → `transfer.events` → Publish message**.
+- **Routing key:** `transfer.completed`, `transfer.rejected` or `transfer.reversed`.
+- **Properties:** `content_type` = `application/json`, `message_id` = the file's `messageId`.
+- **Payload:** the content of the file in `samples/`.
 
-| Archivo | Qué demuestra |
+| File | What it shows |
 |---|---|
-| `transfer-completed.json` | Ana le transfiere a Beto: avisa a los dos (EMAIL) |
-| `transfer-rejected.json` | Avisa solo a Ana, con el motivo |
-| `transfer-reversed.json` | Avisa solo a Ana: el dinero fue devuelto |
-| `transfer-completed-sms-push.json` | Canales SMS y PUSH (simulador) |
-| `transfer-completed-falla.json` | Ana queda `SENT`. El usuario "falla" recibe 503 del simulador (`infra/notification-provider-mock/mappings/notifications-falla.json`), se reintenta cada 5 s y termina en `notification.transfer-events.q.dlq` con `attempts = 4` |
-| `mensaje-invalido.txt` | Lo que hoy envía Transfer (`toString()`): va directo a la DLQ |
+| `transfer-completed.json` | Ana transfers to Beto: both are notified (EMAIL) |
+| `transfer-rejected.json` | Only Ana is notified, with the reason |
+| `transfer-reversed.json` | Only Ana is notified: the money was returned |
+| `transfer-completed-sms-push.json` | SMS and PUSH channels (provider mock) |
+| `transfer-completed-falla.json` | Ana ends `SENT`. The "falla" user gets 503 from the mock (`infra/notification-provider-mock/mappings/notifications-falla.json`), is retried every 5 s and ends in `notification.transfer-events.q.dlq` with `attempts = 4` |
+| `mensaje-invalido.txt` | A body that is not JSON: straight to the DLQ |
 
-Para ver el resultado:
+To see the result:
 
 ```
 docker compose exec notification-db psql -U notification -d notification_db -c "select user_id, event_type, channel, status, attempts from notification_log order by created_at;"
@@ -149,22 +149,24 @@ docker compose exec notification-db psql -U notification -d notification_db -c "
 ## Tests
 
 ```
-gradlew test -x pitest
+./gradlew test -x pitest        (Windows: .\gradlew.bat test -x pitest)
 ```
 
-- Dominio y caso de uso: tests unitarios sin Spring, con adaptadores en memoria.
-- Adaptadores: listener (ack, reintento, DLQ), proveedor HTTP (`MockRestServiceServer`), SMTP (mock) y JPA.
-- `JpaAdaptersIntegrationTest` corre las migraciones en un PostgreSQL 16 real con Testcontainers. Necesita Docker Desktop encendido; si no, se omite.
-- Sin `-x pitest` también corren las pruebas de mutación (más lentas), igual que en los demás servicios.
-- El CI del repo (`.github/workflows/ci.yml`) corre `./gradlew build` y exige **cobertura de líneas ≥ 90 %** sumando todos los módulos menos `app-service`. Cada módulo deja su reporte en `build/reports/jacocoHtml/index.html`.
+- Domain and use case: unit tests without Spring, with in-memory adapters.
+- Adapters: listener (ack, retry, DLQ), HTTP provider (`MockRestServiceServer`), SMTP (mock) and JPA.
+- `JpaAdaptersIntegrationTest` runs the migrations on a real PostgreSQL 16 with Testcontainers. It needs Docker running; otherwise it is skipped.
+- Without `-x pitest`, mutation tests run too (slower), as in the other services.
+- The repo CI (`.github/workflows/ci.yml`) runs `./gradlew build` and requires **line coverage ≥ 90 %** across all modules except `app-service`. Each module writes its report to `build/reports/jacocoHtml/index.html`.
 
-## Con el sistema completo (Docker Compose)
+## With the whole system (Docker Compose)
 
-`docker compose --profile apps up -d --build` construye este servicio con `deployment/Dockerfile`. El compose ya inyecta la base de datos, RabbitMQ y `NOTIFICATION_PROVIDER_URI`.
+`docker compose --profile apps up -d --build` builds this service with `deployment/Dockerfile`. The compose already injects the database, RabbitMQ and `NOTIFICATION_PROVIDER_URI`.
 
-Para correo real dentro de Docker, agrega las variables `ADAPTERS_EMAIL_ENABLED` y `SPRING_MAIL_*` al servicio `notification-service` en tu `docker-compose.override.yml`, tomándolas de tu `.env` local.
+Optional settings go in a `.env` file at the repo root (a copy of `.env.example`; git-ignored):
 
-## Pendientes con el equipo
+| For | Variables in `.env` |
+|---|---|
+| Real email (Gmail) | `NOTIFICATION_EMAIL_ENABLED=true`, `NOTIFICATION_SMTP_USER`, `NOTIFICATION_SMTP_PASSWORD` (app password) |
+| CloudAMQP instead of the local broker | `RABBITMQ_HOST`, `RABBITMQ_PORT=5671`, `RABBITMQ_VHOST`, `RABBITMQ_SSL_ENABLED=true`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
 
-- **Transfer** debe publicar el envelope JSON de §4.1 con el payload completo. Hoy usa `toString()` y envía `senderUserId`, `recipientUserId` y `currency` en `null`.
-- **Identity:** `R__seed_recipient_contacts.sql` usa los mismos usuarios de demo de Identity (Ana, Beto y el auditor, `V2__demo_users.sql`). Si Identity los cambia, hay que actualizar este archivo.
+Without a `.env`, everything works with the local broker and the provider mock.
