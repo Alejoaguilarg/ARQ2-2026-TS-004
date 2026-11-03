@@ -4,7 +4,8 @@ COPY . .
 RUN chmod +x gradlew && ./gradlew :app-service:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && mkdir -p /var/lib/finova/keys && chown appuser:appgroup /var/lib/finova/keys && chmod 700 /var/lib/finova/keys
 WORKDIR /app
 COPY --from=build /workspace/applications/app-service/build/libs/identity-service.jar app.jar
 USER appuser

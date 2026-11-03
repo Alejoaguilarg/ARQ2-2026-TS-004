@@ -89,6 +89,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://identity-db:5432/identity_db
       SPRING_DATASOURCE_USERNAME: ${IDENTITY_DB_USER:-identity}
       SPRING_DATASOURCE_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity}
+      # Token signing key, created on first start and kept in the volume: a restart keeps every token valid.
+      JWT_SIGNING_KEY_FILE: /var/lib/finova/keys/jwt-signing-key.pem
+    volumes: [identity-keys:/var/lib/finova/keys]
     healthcheck: *app-healthcheck
     depends_on:
       identity-db: { condition: service_healthy }
@@ -348,6 +351,7 @@ networks:
 
 volumes:
   identity-db-data:
+  identity-keys:
   wallet-db-data:
   transfer-db-data:
   audit-db-data:

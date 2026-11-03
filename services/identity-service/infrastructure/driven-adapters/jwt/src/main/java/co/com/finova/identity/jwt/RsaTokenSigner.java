@@ -8,9 +8,7 @@ import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.proc.BadJOSEException;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
@@ -22,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Path;
 import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
@@ -34,9 +33,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
-// shortcut: the RSA key lives in memory and changes on every restart, so access tokens die with the
-// process (clients just call /auth/refresh: refresh tokens are in identity_db). Load a key from a
-// mounted secret when Identity runs more than one instance.
+// The signing key comes from finova.security.signing-key-file (JWT_SIGNING_KEY_FILE), created there on first start
+// (SigningKeyFile): restarts keep every issued token valid and every instance signs with the same key. Without a
+// file the key lives in memory and changes on every restart, which is only fit for tests and a quick local run.
 @Component
 public class RsaTokenSigner implements TokenSigner {
 
@@ -46,22 +45,27 @@ public class RsaTokenSigner implements TokenSigner {
     private final Clock clock;
 
     @Autowired
-    public RsaTokenSigner(@Value("${finova.security.issuer:finova-identity}") String issuer) {
+    public RsaTokenSigner(@Value("${finova.security.issuer:finova-identity}") String issuer,
+                          @Value("${finova.security.signing-key-file:}") String keyFile) {
+        this(issuer, Clock.systemUTC(),
+                keyFile.isBlank() ? SigningKeyFile.inMemory() : SigningKeyFile.loadOrCreate(Path.of(keyFile)));
+    }
+
+    RsaTokenSigner(String issuer) {
         this(issuer, Clock.systemUTC());
     }
 
     RsaTokenSigner(String issuer, Clock clock) {
+        this(issuer, clock, SigningKeyFile.inMemory());
+    }
+
+    RsaTokenSigner(String issuer, Clock clock, RSAKey key) {
         this.issuer = issuer;
         this.clock = clock;
-        try {
-            key = new RSAKeyGenerator(2048).keyID(UUID.randomUUID().toString())
-                    .keyUse(KeyUse.SIGNATURE).algorithm(JWSAlgorithm.RS256).generate();
-        } catch (JOSEException e) {
-            throw new IllegalStateException("Cannot generate the token signing key", e);
-        }
+        this.key = key;
         verifier.setJWSKeySelector(new JWSVerificationKeySelector<>(JWSAlgorithm.RS256,
                 new ImmutableJWKSet<>(new JWKSet(key.toPublicJWK()))));
-        // Only this instance holds the key, so a valid signature already means our iss; exp is checked below.
+        // Only Identity holds the key, so a valid signature already means our iss; exp is checked below.
         verifier.setJWTClaimsSetVerifier((claims, context) -> {
         });
     }
