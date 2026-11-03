@@ -1,0 +1,6 @@
+# Scripts that run inside Linux containers keep Unix line endings, even in a Windows checkout
+# (core.autocrlf=true would give gradlew CRLF, and /bin/sh then answers "./gradlew: not found").
+gradlew text eol=lf
+*.sh text eol=lf
+gradlew.bat text eol=crlf
+*.cmd text eol=crlf
