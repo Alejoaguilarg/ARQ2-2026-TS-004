@@ -88,10 +88,10 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         chain.doFilter(forwarded, response);
     }
 
-    // spec.md §3.1.3: only login and refresh go without a Bearer; health and metrics stay internal.
+    // spec.md §3.1.3: only login and refresh go without a Bearer. Health and metrics are not on this port at all
+    // (management.server.port), so /actuator here is just another unknown path.
     private static boolean isPublic(HttpServletRequest request) {
         String path = RequestPaths.of(request);
-        return "POST".equals(request.getMethod()) && ("/auth/login".equals(path) || "/auth/refresh".equals(path))
-                || path.startsWith("/actuator/");
+        return "POST".equals(request.getMethod()) && ("/auth/login".equals(path) || "/auth/refresh".equals(path));
     }
 }

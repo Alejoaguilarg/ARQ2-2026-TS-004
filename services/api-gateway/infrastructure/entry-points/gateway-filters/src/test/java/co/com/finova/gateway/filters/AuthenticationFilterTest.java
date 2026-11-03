@@ -150,8 +150,9 @@ class AuthenticationFilterTest {
     }
 
     @Test
-    void actuatorIsPublic() throws Exception {
-        assertThat(send(new MockHttpServletRequest("GET", "/actuator/health")).getStatus()).isEqualTo(200);
+    void actuatorNeedsATokenOnThePublicPort() throws Exception {
+        // Health and metrics live on the management port; here /actuator is not a way around authentication.
+        assertThat(send(new MockHttpServletRequest("GET", "/actuator/prometheus")).getStatus()).isEqualTo(401);
     }
 
     @Test
