@@ -28,6 +28,7 @@ import org.springframework.boot.test.autoconfigure.actuate.observability.AutoCon
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -88,6 +89,9 @@ class GatewayPipelineIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @LocalManagementPort
+    private int managementPort;
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         String upstream = "http://localhost:" + UPSTREAM.getAddress().getPort();
@@ -100,6 +104,7 @@ class GatewayPipelineIntegrationTest {
         registry.add("JWKS_URI", () -> upstream + "/.well-known/jwks.json");
         registry.add("IDENTITY_SERVICE_URI", () -> "http://localhost:" + closedPort());
         registry.add("spring.http.client.read-timeout", () -> "1s");
+        registry.add("management.server.port", () -> "0");
     }
 
     // The broker's topology (infra/rabbitmq/definitions.json) reduced to what the Gateway publishes to.
@@ -207,7 +212,40 @@ class GatewayPipelineIntegrationTest {
     }
 
     private String metrics() throws Exception {
-        return send(HttpRequest.newBuilder(uri("/actuator/prometheus")).GET()).body();
+        HttpResponse<String> response = send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + managementPort + "/actuator/prometheus")).GET());
+        assertThat(response.statusCode()).isEqualTo(200);
+        return response.body();
+    }
+
+    @Test
+    void healthAndMetricsAreOnlyOnTheManagementPort() throws Exception {
+        String token = "Bearer " + accessToken(UUID.randomUUID().toString());
+        assertThat(send(HttpRequest.newBuilder(URI.create("http://localhost:" + managementPort + "/actuator/health"))
+                .GET()).body()).contains("UP");
+
+        assertThat(send(HttpRequest.newBuilder(uri("/actuator/health")).GET()).statusCode()).isEqualTo(401);
+        assertThat(send(HttpRequest.newBuilder(uri("/actuator/prometheus")).header("Authorization", token).GET())
+                .statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void onlyTheSpecEndpointsAreRouted() throws Exception {
+        String token = "Bearer " + accessToken(UUID.randomUUID().toString());
+        // The wallet upstream stub answers anything under /wallets; the Gateway must not forward these.
+        for (HttpRequest.Builder request : List.of(
+                HttpRequest.newBuilder(uri("/wallets/me/ledger")).GET(),
+                HttpRequest.newBuilder(uri("/wallets/me/balance")).POST(HttpRequest.BodyPublishers.noBody()),
+                HttpRequest.newBuilder(uri("/transfers")).GET(),
+                HttpRequest.newBuilder(uri("/transfers/" + UUID.randomUUID() + "/cancel"))
+                        .POST(HttpRequest.BodyPublishers.noBody()),
+                HttpRequest.newBuilder(uri("/auth/users")).GET(),
+                HttpRequest.newBuilder(uri("/users/lookup")).GET())) {
+            HttpResponse<String> response = send(request.header("Authorization", token));
+            assertThat(response.statusCode()).as(response.uri().toString()).isEqualTo(404);
+        }
+        assertThat(send(HttpRequest.newBuilder(uri("/wallets/me/balance")).header("Authorization", token).GET())
+                .statusCode()).isEqualTo(200);
     }
 
     @Test

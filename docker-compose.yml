@@ -69,7 +69,10 @@ services:
       TRANSFER_SERVICE_URI: http://transfer-service:8080
       AUDIT_SERVICE_URI: http://audit-service:8080
       JWKS_URI: http://identity-service:8080/.well-known/jwks.json
-    healthcheck: *app-healthcheck
+    # Health and metrics answer on the management port 9090, which is not published (spec §1.4).
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/actuator/health | grep -q UP"]
     depends_on:
       redis: { condition: service_healthy }
       rabbitmq-init: { condition: service_completed_successfully }
