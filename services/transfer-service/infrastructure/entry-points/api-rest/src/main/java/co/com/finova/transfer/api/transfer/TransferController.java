@@ -62,7 +62,7 @@ public class TransferController {
         CreateTransferUseCase.Result result = createTransfer.handle(request, correlationId);
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.LOCATION, TransferResponses.url(result.transfer()));
-        headers.add(CorrelationIdFilter.HEADER, correlationId.toString());
+        // No X-Correlation-Id here: the Gateway owns it (spec §1.5) and already returns it on every response.
         if (result.replayed()) {
             headers.add(REPLAYED_HEADER, "true");
         }
