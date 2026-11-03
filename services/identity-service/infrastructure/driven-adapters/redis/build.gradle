@@ -1,0 +1,13 @@
+dependencies {
+    implementation project(':model')
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Spring Boot 3.4 pins Testcontainers 1.20, which Docker Engine 29+ rejects (API version too old).
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.4')
+    testImplementation 'org.testcontainers:junit-jupiter'
+}
+
+pitest {
+    // Mutation testing reruns tests per mutant; one Redis container per run is too slow.
+    excludedTestClasses = ['*IntegrationTest']
+}

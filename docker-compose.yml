@@ -17,10 +17,14 @@ x-app-env: &app-env
   SPRING_PROFILES_ACTIVE: docker
   SPRING_DATA_REDIS_HOST: redis
   SPRING_DATA_REDIS_PORT: "6379"
-  SPRING_RABBITMQ_HOST: rabbitmq
-  SPRING_RABBITMQ_PORT: "5672"
+  # The local broker by default. A developer can point the services at a cloud broker (e.g. CloudAMQP)
+  # from their own .env with RABBITMQ_HOST/PORT/USER/PASSWORD/VHOST/SSL_ENABLED; see .env.example.
+  SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  SPRING_RABBITMQ_PORT: "${RABBITMQ_PORT:-5672}"
   SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-finova}
   SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-finova}
+  SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-/}
+  SPRING_RABBITMQ_SSL_ENABLED: "${RABBITMQ_SSL_ENABLED:-false}"
   SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
   SPRING_JPA_DATABASEPLATFORM: org.hibernate.dialect.PostgreSQLDialect
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
@@ -207,6 +211,22 @@ services:
       timeout: 3s
       retries: 10
 
+  # Warm standby (spec.md §1.3): asynchronous copy of the primary, read-only.
+  # Services only talk to the primary; promote it by hand with `REPLICAOF NO ONE`.
+  redis-replica:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [backend]
+    command: ["redis-server", "--replicaof", "redis", "6379", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes: [redis-replica-data:/data]
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli info replication | grep -q 'master_link_status:up'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # ---------------------------------------------------------------- message broker
   rabbitmq:
     image: rabbitmq:4.1-management-alpine
@@ -266,6 +286,7 @@ services:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus-data:/prometheus
 
   loki:
@@ -321,6 +342,7 @@ volumes:
   audit-db-data:
   notification-db-data:
   redis-data:
+  redis-replica-data:
   rabbitmq-data:
   prometheus-data:
   loki-data:

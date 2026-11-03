@@ -1,0 +1,18 @@
+dependencies {
+    implementation project(':model')
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    runtimeOnly 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Spring Boot 3.4 pins Testcontainers 1.20, which Docker Engine 29+ rejects (API version too old).
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.4')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+}
+
+pitest {
+    // Mutation testing reruns tests per mutant; one PostgreSQL container per run is too slow.
+    excludedTestClasses = ['*IntegrationTest']
+}

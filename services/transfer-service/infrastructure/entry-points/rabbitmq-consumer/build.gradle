@@ -1,0 +1,8 @@
+dependencies {
+    implementation project(':model')
+    implementation project(':usecase')
+    // Reads the consumed envelopes with the shared contract mapper (spec §4.1, §4.4).
+    implementation project(':message-json')
+    implementation 'org.springframework:spring-context'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+}

@@ -1,0 +1,134 @@
+# Unit tests for alerts.yml. Run from this folder:
+#   docker run --rm -v "$PWD":/w -w /w --entrypoint promtool prom/prometheus:v3.5.0 test rules alerts.test.yml
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 15s
+
+tests:
+  - name: a message in a DLQ alerts at once; retry and work queues do not
+    interval: 15s
+    input_series:
+      - series: 'rabbitmq_detailed_queue_messages{queue="wallet.commands.q.dlq"}'
+        values: '0 0 1 1'
+      - series: 'rabbitmq_detailed_queue_messages{queue="wallet.commands.q.retry"}'
+        values: '5 5 5 5'
+      - series: 'rabbitmq_detailed_queue_messages{queue="wallet.commands.q"}'
+        values: '9 9 9 9'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: MessagesInDeadLetterQueue
+        exp_alerts: []
+      - eval_time: 30s
+        alertname: MessagesInDeadLetterQueue
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              queue: wallet.commands.q.dlq
+            exp_annotations:
+              summary: "1 message(s) in wallet.commands.q.dlq"
+              description: "A message exhausted its retries. Inspect it in the RabbitMQ UI (http://localhost:15672) and look up its correlationId in Loki."
+
+  - name: a service down for a minute alerts; a short blip does not
+    interval: 15s
+    input_series:
+      - series: 'up{job="finova-services", instance="transfer-service:8080"}'
+        values: '1 0 0 0 0 0 0'
+      - series: 'up{job="finova-services", instance="wallet-service:8080"}'
+        values: '1 0 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: ServiceDown
+        exp_alerts: []
+      - eval_time: 75s
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: finova-services
+              instance: transfer-service:8080
+            exp_annotations:
+              summary: "transfer-service:8080 is down"
+              description: "Prometheus could not scrape /actuator/prometheus for 1 minute."
+
+  - name: over 5% of 5xx for 5 minutes alerts; 1% does not
+    interval: 1m
+    input_series:
+      # api-gateway: 100 requests a minute, 10 of them 502.
+      - series: 'http_server_requests_seconds_count{job="finova-services", instance="api-gateway:8080", status="200"}'
+        values: '0+90x15'
+      - series: 'http_server_requests_seconds_count{job="finova-services", instance="api-gateway:8080", status="502"}'
+        values: '0+10x15'
+      # identity-service: 100 requests a minute, 1 of them 500.
+      - series: 'http_server_requests_seconds_count{job="finova-services", instance="identity-service:8080", status="200"}'
+        values: '0+99x15'
+      - series: 'http_server_requests_seconds_count{job="finova-services", instance="identity-service:8080", status="500"}'
+        values: '0+1x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HighServerErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: api-gateway:8080
+            exp_annotations:
+              summary: "api-gateway:8080: 10% of the requests end in 5xx"
+              description: "Errors in Grafana: Explore, Loki, {service=~\".+\"} |= \"ERROR\"."
+
+  - name: the gateway failing closed because of Redis alerts; other rejections do not
+    interval: 15s
+    input_series:
+      - series: 'finova_gateway_rejections_total{code="SECURITY_STORE_UNAVAILABLE", status="503"}'
+        values: '0 0 3 6'
+      - series: 'finova_gateway_rejections_total{code="UNAUTHORIZED", status="401"}'
+        values: '0 50 100 150'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: SecurityStoreUnavailable
+        exp_alerts: []
+      - eval_time: 45s
+        alertname: SecurityStoreUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "The Gateway cannot reach Redis and is answering 503"
+              description: "Requests are rejected (fail closed). Check the redis container."
+
+  - name: one reused refresh token alerts
+    interval: 15s
+    input_series:
+      - series: 'finova_identity_security_events_total{event="refresh_reused"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 15s
+        alertname: RefreshTokenReused
+        exp_alerts: []
+      - eval_time: 45s
+        alertname: RefreshTokenReused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "A refresh token was reused: a session was revoked as possibly stolen"
+              description: "Identity logs it at WARN: {service=\"identity-service\"} |= \"Refresh token reused\"."
+
+  - name: more than 20 failed logins in 5 minutes alerts; a few do not
+    interval: 1m
+    input_series:
+      - series: 'finova_identity_security_events_total{event="login_failed"}'
+        values: '0 2 4 6 8 10 40'
+      - series: 'finova_identity_security_events_total{event="step_up_failed"}'
+        values: '0 50 100 150 200 250 300'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: LoginFailureSpike
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: LoginFailureSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "40 failed logins in 5 minutes"
+              description: "Possible credential stuffing. Failed logins: {service=\"identity-service\"} |= \"Login rejected\"."

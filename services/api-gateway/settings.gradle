@@ -1,0 +1,22 @@
+pluginManagement {
+    repositories {
+        //mavenLocal()
+        //maven { url '...' }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'api-gateway'
+
+include ':app-service'
+include ':model'
+include ':usecase'
+project(':app-service').projectDir = file('./applications/app-service')
+project(':model').projectDir = file('./domain/model')
+project(':usecase').projectDir = file('./domain/usecase')
+include ':gateway-filters'
+project(':gateway-filters').projectDir = file('./infrastructure/entry-points/gateway-filters')
+include ':redis'
+project(':redis').projectDir = file('./infrastructure/driven-adapters/redis')
+include ':jwt'
+project(':jwt').projectDir = file('./infrastructure/driven-adapters/jwt')

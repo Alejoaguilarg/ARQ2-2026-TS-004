@@ -1,0 +1,42 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: identity-service
+  devtools:
+    add-properties: false
+  data:
+    redis:
+      host: "localhost"
+      port: 6379
+      timeout: "500ms"
+      connect-timeout: "500ms"
+  # Overridden by SPRING_DATASOURCE_* in docker-compose.yml.
+  datasource:
+    url: "jdbc:postgresql://localhost:5432/identity_db"
+    username: "identity"
+    password: "identity"
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema (ADR 006); Hibernate only checks the entities match it.
+      ddl-auto: validate
+finova:
+  security:
+    # iss of every token Identity signs; the Gateway checks the same value (JWT_ISSUER there).
+    issuer: ${JWT_ISSUER:finova-identity}
+    # AES-256 key (base64) that encrypts the OTP secrets in identity_db.
+    # shortcut: the default is a development key committed with the demo secrets; set OTP_ENCRYPTION_KEY
+    # and re-encrypt the secrets before any real deployment.
+    otp-key: ${OTP_ENCRYPTION_KEY:/zUl5NaRDlw5Alr4Q5WD75YZ+SO5WWh/zjaqqr0fgzY=}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,prometheus"
+logging:
+  pattern:
+    # spec.md §1: the correlationId goes in every log line; it is the one the Gateway returned to the client.
+    # [correlationId] [traceId,spanId]: the second part links a log line to its trace in Tempo (Grafana Loki
+    # derived field in infra/observability/grafana/provisioning/datasources/datasources.yml).
+    correlation: "[%X{correlationId:-}] [%X{traceId:-},%X{spanId:-}] "
