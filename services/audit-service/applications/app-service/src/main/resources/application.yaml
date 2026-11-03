@@ -75,3 +75,8 @@ adapters:
     partitions:
       initial-delay: "PT30S"
       check-interval: "PT6H"
+logging:
+  pattern:
+    # Spec §1.4: correlationId and transferId in every log line, from the MDC (CorrelationIdFilter for HTTP,
+    # AttemptRecordedListener for messages); the trace ids link a line to its trace. Empty brackets when absent.
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] [%X{traceId:-},%X{spanId:-}] "

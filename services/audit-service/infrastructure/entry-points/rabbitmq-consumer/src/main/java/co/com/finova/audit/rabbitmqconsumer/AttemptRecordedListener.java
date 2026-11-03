@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,8 @@ public class AttemptRecordedListener {
 
     private static final Logger LOG = LoggerFactory.getLogger(AttemptRecordedListener.class);
     private static final String METRIC = "audit.attempts";
+    static final String CORRELATION_ID = "correlationId";
+    static final String TRANSFER_ID = "transferId";
 
     private final RecordAttemptUseCase recordAttempt;
     private final AttemptRecordedReader reader;
@@ -56,8 +59,20 @@ public class AttemptRecordedListener {
         this.deadLettered = counter(meters, "dead_lettered");
     }
 
+    // Spec §1.4: correlationId and transferId in every log line of the delivery. The AMQP correlation-id property
+    // is the best value until the body is read; the attempt's own ids replace it.
     @RabbitListener(id = "audit-attempts", queues = QUEUE, ackMode = "MANUAL", concurrency = "1")
     public void onMessage(Message message, Channel channel) throws IOException {
+        putLogContext(message.getMessageProperties().getCorrelationId(), null);
+        try {
+            handle(message, channel);
+        } finally {
+            MDC.remove(CORRELATION_ID);
+            MDC.remove(TRANSFER_ID);
+        }
+    }
+
+    private void handle(Message message, Channel channel) throws IOException {
         long tag = message.getMessageProperties().getDeliveryTag();
         String messageId = message.getMessageProperties().getMessageId();
         long retries = RetryCount.of(message, QUEUE);
@@ -71,6 +86,8 @@ public class AttemptRecordedListener {
             return;
         }
 
+        putLogContext(attempt.correlationId().toString(),
+                attempt.transferId() == null ? null : attempt.transferId().toString());
         try {
             RecordOutcome outcome = recordAttempt.handle(attempt);
             (outcome.duplicate() ? duplicates : recorded).increment();
@@ -88,6 +105,19 @@ public class AttemptRecordedListener {
                 retried.increment();
                 channel.basicNack(tag, false, false);
             }
+        }
+    }
+
+    private static void putLogContext(String correlationId, String transferId) {
+        put(CORRELATION_ID, correlationId);
+        put(TRANSFER_ID, transferId);
+    }
+
+    private static void put(String key, String value) {
+        if (value == null) {
+            MDC.remove(key);
+        } else {
+            MDC.put(key, value);
         }
     }
 
