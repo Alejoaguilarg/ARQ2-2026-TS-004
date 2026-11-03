@@ -67,6 +67,9 @@ shared environment.
 
 - Every message carries the §4.1 envelope and leaves through the **transactional outbox**: the relay publishes
   pending rows every 100 ms in batches of 100, with publisher confirms (decision S3).
+- A row that fails to publish (for example, an exchange or a permission missing in the broker) logs an ERROR with
+  its `messageId`, records the attempt, and is retried after 1 s, 2 s, 4 s… up to 5 min. It never blocks the rows
+  after it and is never dropped (`attempts`, `next_attempt_at` and `last_error` in `outbox_messages`, migration V3).
 - Consumers use manual acks. A technical error rejects the delivery without requeue; the queue sends it to its
   `.retry` queue (5 s) and back. After 3 retries (4 deliveries) the message goes to the `.dlq` (decision S1).
 - Invalid JSON, an unknown `type` or a contract violation goes straight to the `.dlq` without retries
@@ -97,6 +100,7 @@ the root `.env` file (see `.env.example`).
 | `ADAPTERS_RABBITMQ_MAX_RETRIES` | `3` | Retries before the `.dlq` (S1) |
 | `ADAPTERS_RABBITMQ_CONFIRM_TIMEOUT` | `5s` | Wait for a publisher confirm |
 | `ADAPTERS_OUTBOX_RELAY_ENABLED`, `ADAPTERS_OUTBOX_RELAY_INTERVAL`, `ADAPTERS_OUTBOX_BATCH_SIZE` | `true`, `100ms`, `100` | Outbox relay (S3) |
+| `ADAPTERS_OUTBOX_RETRY_INITIAL_DELAY`, `ADAPTERS_OUTBOX_RETRY_MAX_DELAY` | `1s`, `5m` | Wait before retrying a row that failed to publish, doubled after each failure up to the maximum |
 | `ADAPTERS_BALANCE_REBUILD_ENABLED`, `ADAPTERS_BALANCE_REBUILD_INTERVAL`, `ADAPTERS_BALANCE_REBUILD_PAGE_SIZE` | `true`, `5m`, `500` | Balance cache rebuild job (S6) |
 | `MANAGEMENT_OTLP_TRACING_ENDPOINT`, `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | set by the compose (`x-app-env`): Alloy, every request | Where traces go; without an endpoint nothing is exported |
 | `MANAGEMENT_TRACING_ENABLED` | `true` | `false` turns tracing off |

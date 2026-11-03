@@ -96,10 +96,10 @@ class JdbcOutboxRepositoryTest extends PostgresTestBase {
         OutboxMessage oldest = saveAt(NOW, transferId);
         OutboxMessage middle = saveAt(NOW.plusSeconds(1), transferId);
 
-        List<PendingOutboxMessage> pending = repository.lockPending(2);
+        List<PendingOutboxMessage> pending = repository.lockPending(2, NOW);
 
         assertThat(pending).extracting(PendingOutboxMessage::id).containsExactly(oldest.id(), middle.id());
-        assertThat(repository.lockPending(10)).extracting(PendingOutboxMessage::id)
+        assertThat(repository.lockPending(10, NOW)).extracting(PendingOutboxMessage::id)
                 .containsExactly(oldest.id(), middle.id(), newest.id());
     }
 
@@ -107,7 +107,7 @@ class JdbcOutboxRepositoryTest extends PostgresTestBase {
     void lockPendingCarriesDestinationIdsAndTheStoredEnvelope() throws Exception {
         OutboxMessage saved = saveAt(NOW, transferId);
 
-        PendingOutboxMessage pending = repository.lockPending(1).get(0);
+        PendingOutboxMessage pending = repository.lockPending(1, NOW).get(0);
 
         assertThat(pending.id()).isEqualTo(saved.id());
         assertThat(pending.correlationId()).isEqualTo(correlationId);
@@ -121,7 +121,7 @@ class JdbcOutboxRepositoryTest extends PostgresTestBase {
     void lockPendingReadsANullTransferId() {
         saveAt(NOW, null);
 
-        assertThat(repository.lockPending(1).get(0).transferId()).isNull();
+        assertThat(repository.lockPending(1, NOW).get(0).transferId()).isNull();
     }
 
     @Test
@@ -133,7 +133,7 @@ class JdbcOutboxRepositoryTest extends PostgresTestBase {
 
         assertThat(jdbc.queryForObject("SELECT published_at FROM outbox_messages WHERE id = ?",
                 OffsetDateTime.class, published.id()).toInstant()).isEqualTo(NOW.plusMillis(250));
-        assertThat(repository.lockPending(10)).extracting(PendingOutboxMessage::id)
+        assertThat(repository.lockPending(10, NOW)).extracting(PendingOutboxMessage::id)
                 .containsExactly(stillPending.id());
     }
 
@@ -142,6 +142,78 @@ class JdbcOutboxRepositoryTest extends PostgresTestBase {
         UUID unknown = UUID.randomUUID();
 
         assertThatThrownBy(() -> repository.markPublished(unknown, NOW))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(unknown.toString());
+    }
+
+    // ---------------------------------------------------------------- retries (pending item 28, V3)
+
+    @Test
+    void aNewRowHasNoAttemptsAndIsReadyNow() {
+        OutboxMessage saved = saveAt(NOW, transferId);
+
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT attempts, next_attempt_at, last_error FROM outbox_messages WHERE id = ?", saved.id());
+        assertThat(row.get("attempts")).isEqualTo(0);
+        assertThat(row.get("next_attempt_at")).isNull();
+        assertThat(row.get("last_error")).isNull();
+        assertThat(repository.lockPending(10, NOW).get(0).attempts()).isZero();
+    }
+
+    @Test
+    void recordFailureStoresTheAttemptTheRetryTimeAndTheError() {
+        OutboxMessage failed = saveAt(NOW, transferId);
+
+        repository.recordFailure(failed.id(), 3, NOW.plusSeconds(4), "NOT_FOUND - no exchange 'wallet.missing'");
+
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT attempts, last_error, published_at FROM outbox_messages WHERE id = ?", failed.id());
+        assertThat(row.get("attempts")).isEqualTo(3);
+        assertThat(row.get("last_error")).isEqualTo("NOT_FOUND - no exchange 'wallet.missing'");
+        assertThat(row.get("published_at")).isNull();
+        assertThat(jdbc.queryForObject("SELECT next_attempt_at FROM outbox_messages WHERE id = ?",
+                OffsetDateTime.class, failed.id()).toInstant()).isEqualTo(NOW.plusSeconds(4));
+    }
+
+    @Test
+    void lockPendingSkipsRowsWhoseRetryTimeHasNotCome() {
+        OutboxMessage failed = saveAt(NOW, transferId);
+        OutboxMessage next = saveAt(NOW.plusSeconds(1), transferId);
+        repository.recordFailure(failed.id(), 2, NOW.plusSeconds(10), "No broker confirm");
+
+        assertThat(repository.lockPending(10, NOW.plusSeconds(9))).extracting(PendingOutboxMessage::id)
+                .containsExactly(next.id());
+
+        List<PendingOutboxMessage> due = repository.lockPending(10, NOW.plusSeconds(10));
+        assertThat(due).extracting(PendingOutboxMessage::id).containsExactly(failed.id(), next.id());
+        assertThat(due.get(0).attempts()).isEqualTo(2);
+    }
+
+    @Test
+    void recordFailureKeepsOnlyTheFirst500CharactersOfTheError() {
+        OutboxMessage failed = saveAt(NOW, transferId);
+
+        repository.recordFailure(failed.id(), 1, NOW.plusSeconds(1), "x".repeat(800));
+
+        assertThat(jdbc.queryForObject("SELECT last_error FROM outbox_messages WHERE id = ?", String.class,
+                failed.id())).hasSize(500);
+    }
+
+    @Test
+    void recordFailureAcceptsAnErrorWithoutMessage() {
+        OutboxMessage failed = saveAt(NOW, transferId);
+
+        repository.recordFailure(failed.id(), 1, NOW.plusSeconds(1), null);
+
+        assertThat(jdbc.queryForObject("SELECT attempts FROM outbox_messages WHERE id = ?", Integer.class,
+                failed.id())).isEqualTo(1);
+    }
+
+    @Test
+    void recordFailureFailsForAnUnknownRow() {
+        UUID unknown = UUID.randomUUID();
+
+        assertThatThrownBy(() -> repository.recordFailure(unknown, 1, NOW, "error"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(unknown.toString());
     }
@@ -157,14 +229,14 @@ class JdbcOutboxRepositoryTest extends PostgresTestBase {
             relayA.setAutoCommit(false);
             relayB.setAutoCommit(false);
 
-            List<PendingOutboxMessage> lockedByA = onConnection(relayA).lockPending(2);
-            List<PendingOutboxMessage> lockedByB = onConnection(relayB).lockPending(10);
+            List<PendingOutboxMessage> lockedByA = onConnection(relayA).lockPending(2, NOW);
+            List<PendingOutboxMessage> lockedByB = onConnection(relayB).lockPending(10, NOW);
 
             assertThat(lockedByA).extracting(PendingOutboxMessage::id).containsExactly(first.id(), second.id());
             assertThat(lockedByB).extracting(PendingOutboxMessage::id).containsExactly(third.id());
 
             relayA.rollback();
-            assertThat(onConnection(relayB).lockPending(10)).extracting(PendingOutboxMessage::id)
+            assertThat(onConnection(relayB).lockPending(10, NOW)).extracting(PendingOutboxMessage::id)
                     .containsExactly(first.id(), second.id(), third.id());
             relayB.rollback();
         }

@@ -42,6 +42,19 @@ class PendingOutboxMessageTest {
         assertInvalid(() -> new PendingOutboxMessage(ID, CORRELATION_ID, TRANSFER_ID, "wallet.events", "k", ""));
     }
 
+    @Test
+    void aRowThatNeverFailedHasNoAttempts() {
+        assertThat(new PendingOutboxMessage(ID, CORRELATION_ID, TRANSFER_ID, "wallet.events", "k", JSON).attempts())
+                .isZero();
+        assertThat(new PendingOutboxMessage(ID, CORRELATION_ID, TRANSFER_ID, "wallet.events", "k", JSON, 3).attempts())
+                .isEqualTo(3);
+    }
+
+    @Test
+    void rejectsNegativeAttempts() {
+        assertInvalid(() -> new PendingOutboxMessage(ID, CORRELATION_ID, TRANSFER_ID, "wallet.events", "k", JSON, -1));
+    }
+
     private static void assertInvalid(Runnable construction) {
         assertThatThrownBy(construction::run).isInstanceOf(ContractViolationException.class);
     }
