@@ -38,6 +38,29 @@ class SmtpEmailProviderTest {
     }
 
     @Test
+    void withADemoInboxEveryEmailGoesThereAndSaysWhoItWasFor() {
+        new SmtpEmailProvider(mailSender, "finova.pruebas@gmail.com", " demo.inbox@finova.test ")
+                .send(notification(Channel.EMAIL));
+
+        ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(sent.capture());
+        assertThat(sent.getValue().getTo()).containsExactly("demo.inbox@finova.test");
+        assertThat(sent.getValue().getSubject()).isEqualTo("Finova: transfer sent");
+        assertThat(sent.getValue().getText())
+                .startsWith("You sent 150000.00 COP")
+                .endsWith("(Demo inbox: this email was for user.a@finova.test)");
+    }
+
+    @Test
+    void aBlankDemoInboxSendsToTheRecipient() {
+        new SmtpEmailProvider(mailSender, "finova.pruebas@gmail.com", " ").send(notification(Channel.EMAIL));
+
+        ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(sent.capture());
+        assertThat(sent.getValue().getTo()).containsExactly("user.a@finova.test");
+    }
+
+    @Test
     void anSmtpFailureIsADeliveryFailure() {
         doThrow(new MailSendException("connection refused")).when(mailSender).send(any(SimpleMailMessage.class));
 

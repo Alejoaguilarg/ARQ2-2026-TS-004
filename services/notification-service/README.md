@@ -100,25 +100,21 @@ docker compose exec notification-db psql -U notification -d notification_db -c "
 
 ## Real email (Gmail)
 
-1. In a test Gmail account: turn on 2-Step Verification and create an **app password**.
-2. Add these variables in IntelliJ:
+1. In a test Gmail account: turn on 2-Step Verification and create an **app password** (Google Account → Security → App passwords). The account password does not work.
+2. **With Docker Compose:** put these in your own `.env` (it is git-ignored; the repo is public), then `docker compose --profile apps up -d notification-service`:
 
 ```
-ADAPTERS_EMAIL_ENABLED=true
-SPRING_MAIL_HOST=smtp.gmail.com
-SPRING_MAIL_PORT=587
-SPRING_MAIL_USERNAME=<test account>@gmail.com
-SPRING_MAIL_PASSWORD=<app password>
+NOTIFICATION_EMAIL_ENABLED=true
+NOTIFICATION_SMTP_USER=<test account>@gmail.com
+NOTIFICATION_SMTP_PASSWORD=<16-letter app password>
+NOTIFICATION_DEMO_INBOX=<inbox that receives every email>
 ```
 
-3. Point Ana and Beto (Identity's demo users) to your inbox, **only in your local database** (the repo is public). Gmail delivers `account+anything@gmail.com` to the same inbox:
+   **In IntelliJ:** the same with the service's own names: `ADAPTERS_EMAIL_ENABLED=true`, `SPRING_MAIL_HOST=smtp.gmail.com`, `SPRING_MAIL_PORT=587`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` and `ADAPTERS_EMAIL_REDIRECT_TO`.
 
-```sql
-UPDATE recipient_contacts SET email = '<account>+ana@gmail.com'  WHERE user_id = '7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c';
-UPDATE recipient_contacts SET email = '<account>+beto@gmail.com' WHERE user_id = '2b9d4e6f-1a3c-4e5b-9d7f-0a1b2c3d4e5f';
-```
+3. **Demo inbox.** The demo users have `example.com` addresses, which receive nothing. With `NOTIFICATION_DEMO_INBOX` set, every EMAIL notification goes to that one address, whoever it was for, and its body ends with `(Demo inbox: this email was for ana@example.com)`. Leave it empty to send to each recipient's own address (then point the contacts to real inboxes **only in your local database**, e.g. `UPDATE recipient_contacts SET email = '<account>+ana@gmail.com' WHERE user_id = '7f3c2b1a-0d4e-4f5a-8b6c-9d0e1f2a3b4c';`; Flyway restores the seed if `R__seed_recipient_contacts.sql` changes).
 
-If `R__seed_recipient_contacts.sql` changes, Flyway runs it again and restores the demo emails.
+PUSH and SMS keep going to the provider mock. Check the sending in `docker compose logs notification-service` and in `notification_log` (status `SENT`).
 
 ## Test without Transfer: sample messages
 

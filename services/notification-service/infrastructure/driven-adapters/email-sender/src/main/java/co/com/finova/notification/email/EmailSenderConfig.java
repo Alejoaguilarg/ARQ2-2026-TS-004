@@ -19,6 +19,6 @@ public class EmailSenderConfig {
             throw new IllegalStateException("adapters.email.from (or SPRING_MAIL_USERNAME) is required "
                     + "when adapters.email.enabled=true");
         }
-        return new SmtpEmailProvider(mailSender, properties.from());
+        return new SmtpEmailProvider(mailSender, properties.from(), properties.redirectTo());
     }
 }
