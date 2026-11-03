@@ -76,6 +76,19 @@ class AuditTrailImmutabilityTest {
     }
 
     @Test
+    void theServiceLoginCannotWinPrivilegesBack() {
+        // Before V2 the service logged in as the owner (a superuser) and only SET ROLE audit_rw: RESET ROLE undid it.
+        asService.sql("RESET ROLE").update();
+        assertEquals(AuditDatabase.SERVICE, asService.sql("SELECT current_user").query(String.class).single());
+        assertFalse(asService.sql("SELECT rolsuper FROM pg_roles WHERE rolname = current_user").query(Boolean.class).single());
+        assertDenied(asService, "UPDATE audit_records SET amount = 1.00", "permission denied");
+        assertDenied(asService, "SET ROLE " + AuditDatabase.OWNER, "permission denied");
+        assertDenied(asService, "CREATE TABLE sneaky (id int)", "permission denied");
+        assertDenied(asService, "ALTER TABLE audit_records DISABLE TRIGGER ALL", "must be owner");
+        assertDenied(asService, "CREATE ROLE intruder SUPERUSER", "permission denied");
+    }
+
+    @Test
     void theTriggerStopsEvenTheOwner() {
         assertDenied(asOwner, "UPDATE audit_records SET amount = 1.00", "append-only");
         assertDenied(asOwner, "DELETE FROM audit_records", "append-only");

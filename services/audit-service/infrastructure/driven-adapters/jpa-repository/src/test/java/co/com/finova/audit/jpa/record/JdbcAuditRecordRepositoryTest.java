@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The repository against a real audit_db, connected as the service is (SET ROLE audit_rw). */
+/** The repository against a real audit_db, connected as the service is (login audit_app, INSERT and SELECT only). */
 @Testcontainers(disabledWithoutDocker = true)
 class JdbcAuditRecordRepositoryTest {
 
