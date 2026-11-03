@@ -36,6 +36,11 @@ spring:
         default-requeue-rejected: false
         missing-queues-fatal: true
         prefetch: 10
+logging:
+  pattern:
+    # Spec §1.4 and the team log format (pending item 6): correlationId and transferId in every log line,
+    # from the MDC (CorrelationIdFilter for HTTP, MessageLogContext for messages). Empty brackets when absent.
+    correlation: "[%X{correlationId:-}] [%X{transferId:-}] "
 management:
   endpoints:
     web:
@@ -57,3 +62,11 @@ adapters:
     relay-enabled: true
     relay-interval: "100ms"
     batch-size: 100
+  balance-rebuild:
+    # Decision S6 (spec §4.5, ADR 004): recompute the balance cache from wallet_db at startup and then every
+    # interval. Override with ADAPTERS_BALANCE_REBUILD_ENABLED, ADAPTERS_BALANCE_REBUILD_INTERVAL and
+    # ADAPTERS_BALANCE_REBUILD_PAGE_SIZE.
+    enabled: true
+    initial-delay: "0s"
+    interval: "5m"
+    page-size: 500

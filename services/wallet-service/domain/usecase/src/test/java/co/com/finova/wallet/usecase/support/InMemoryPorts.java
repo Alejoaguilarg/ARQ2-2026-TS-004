@@ -130,6 +130,16 @@ public final class InMemoryPorts {
             return replace(current, current.balance().plus(amount), updatedAt);
         }
 
+        /** Same order as PostgreSQL uuid: byte by byte, which is the order of the lowercase text. */
+        @Override
+        public List<Wallet> findPageAfter(UUID afterWalletId, int limit) {
+            return byUser.values().stream()
+                    .filter(w -> afterWalletId == null || w.walletId().toString().compareTo(afterWalletId.toString()) > 0)
+                    .sorted(java.util.Comparator.comparing(w -> w.walletId().toString()))
+                    .limit(limit)
+                    .toList();
+        }
+
         private Wallet replace(Wallet current, Money balance, Instant updatedAt) {
             changes++;
             Wallet updated = new Wallet(current.walletId(), current.userId(), balance, current.currency(),

@@ -28,3 +28,5 @@ include ':rabbitmq-consumer'
 project(':rabbitmq-consumer').projectDir = file('./infrastructure/entry-points/rabbitmq-consumer')
 include ':outbox-relay'
 project(':outbox-relay').projectDir = file('./infrastructure/entry-points/outbox-relay')
+include ':balance-rebuild'
+project(':balance-rebuild').projectDir = file('./infrastructure/entry-points/balance-rebuild')

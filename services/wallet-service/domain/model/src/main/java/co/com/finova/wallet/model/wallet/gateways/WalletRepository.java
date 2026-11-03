@@ -4,6 +4,7 @@ import co.com.finova.wallet.model.money.Money;
 import co.com.finova.wallet.model.wallet.Wallet;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,4 +27,10 @@ public interface WalletRepository {
 
     /** Adds the amount and increments the version (credit and reversal). Returns the updated wallet. */
     Wallet increaseBalance(UUID walletId, Money amount, Instant updatedAt);
+
+    /**
+     * Keyset page for the balance cache rebuild (spec §4.5, decision S6): up to limit wallets whose walletId
+     * comes after afterWalletId in the database order, or from the first one when afterWalletId is null.
+     */
+    List<Wallet> findPageAfter(UUID afterWalletId, int limit);
 }

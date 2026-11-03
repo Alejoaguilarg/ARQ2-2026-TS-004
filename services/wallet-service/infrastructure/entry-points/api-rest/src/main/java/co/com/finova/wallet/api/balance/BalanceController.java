@@ -1,5 +1,6 @@
 package co.com.finova.wallet.api.balance;
 
+import co.com.finova.wallet.api.config.UuidFormat;
 import co.com.finova.wallet.api.error.InvalidIdentityHeaderException;
 import co.com.finova.wallet.usecase.getbalance.GetBalanceUseCase;
 import org.springframework.http.MediaType;
@@ -8,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * GET /wallets/me/balance (spec §3.7). The user comes only from X-User-Id, which the Gateway strips
@@ -20,9 +20,6 @@ public class BalanceController {
 
     public static final String USER_ID_HEADER = "X-User-Id";
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
-
-    private static final Pattern UUID_FORMAT =
-            Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final GetBalanceUseCase getBalance;
 
@@ -37,7 +34,7 @@ public class BalanceController {
     }
 
     private static UUID parseUserId(String header) {
-        if (header == null || !UUID_FORMAT.matcher(header).matches()) {
+        if (!UuidFormat.isUuid(header)) {
             throw new InvalidIdentityHeaderException(USER_ID_HEADER, header);
         }
         return UUID.fromString(header);

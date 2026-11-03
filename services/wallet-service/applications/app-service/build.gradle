@@ -1,6 +1,7 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
+	implementation project(':balance-rebuild')
 	implementation project(':outbox-relay')
 	implementation project(':rabbitmq-consumer')
 	implementation project(':message-json')

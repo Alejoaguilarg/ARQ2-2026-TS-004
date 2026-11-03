@@ -295,6 +295,11 @@ class DebitWalletUseCaseTest {
         public Wallet increaseBalance(UUID walletId, Money amount, Instant updatedAt) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public List<Wallet> findPageAfter(UUID afterWalletId, int limit) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private static final class InMemoryLedger implements LedgerRepository {

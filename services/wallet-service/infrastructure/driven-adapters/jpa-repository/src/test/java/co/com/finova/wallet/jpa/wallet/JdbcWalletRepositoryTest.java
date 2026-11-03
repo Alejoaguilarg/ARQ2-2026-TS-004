@@ -11,8 +11,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -133,6 +136,44 @@ class JdbcWalletRepositoryTest extends PostgresTestBase {
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> repository.increaseBalance(UUID.randomUUID(), Money.parse("1.00"), updatedAt))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ---------------------------------------------------------------- balance cache rebuild (decision S6)
+
+    @Test
+    void findPageAfterWalksEveryWalletInWalletIdOrder() {
+        // PostgreSQL orders uuid byte by byte, which is the order of their lowercase text.
+        List<UUID> ids = Stream.generate(UUID::randomUUID).limit(3).toList();
+        ids.forEach(id -> insertWallet(id, UUID.randomUUID()));
+        List<UUID> expected = ids.stream().sorted(Comparator.comparing(UUID::toString)).toList();
+
+        List<Wallet> first = repository.findPageAfter(null, 2);
+        List<Wallet> second = repository.findPageAfter(first.get(1).walletId(), 2);
+
+        assertThat(first).extracting(Wallet::walletId).containsExactly(expected.get(0), expected.get(1));
+        assertThat(second).extracting(Wallet::walletId).containsExactly(expected.get(2));
+        assertThat(repository.findPageAfter(expected.get(2), 2)).isEmpty();
+    }
+
+    @Test
+    void findPageAfterMapsEveryColumn() {
+        insertWallet("500000.00", 3);
+
+        Wallet wallet = repository.findPageAfter(null, 10).get(0);
+
+        assertThat(wallet).isEqualTo(repository.findByUserId(userId).orElseThrow());
+    }
+
+    @Test
+    void findPageAfterIsEmptyWithoutWallets() {
+        assertThat(repository.findPageAfter(null, 10)).isEmpty();
+    }
+
+    private void insertWallet(UUID id, UUID owner) {
+        jdbc.update("""
+                INSERT INTO wallets (wallet_id, user_id, balance, currency, version, updated_at)
+                VALUES (?, ?, 100.00, 'COP', 0, now())
+                """, id, owner);
     }
 
     private Instant storedUpdatedAt() {

@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -66,6 +67,22 @@ public class JdbcWalletRepository implements WalletRepository {
                 .query(JdbcWalletRepository::toWallet)
                 .optional()
                 .orElseThrow(() -> new IllegalStateException("wallet " + walletId + " does not exist"));
+    }
+
+    /** Keyset pagination on the primary key, so every page is an index range scan. */
+    @Override
+    public List<Wallet> findPageAfter(UUID afterWalletId, int limit) {
+        if (afterWalletId == null) {
+            return jdbc.sql("SELECT " + COLUMNS + " FROM wallets ORDER BY wallet_id LIMIT :limit")
+                    .param("limit", limit)
+                    .query(JdbcWalletRepository::toWallet)
+                    .list();
+        }
+        return jdbc.sql("SELECT " + COLUMNS + " FROM wallets WHERE wallet_id > :after ORDER BY wallet_id LIMIT :limit")
+                .param("after", afterWalletId)
+                .param("limit", limit)
+                .query(JdbcWalletRepository::toWallet)
+                .list();
     }
 
     private static Wallet toWallet(ResultSet rs, int rowNum) throws SQLException {
