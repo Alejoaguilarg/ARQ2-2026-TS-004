@@ -13,6 +13,9 @@ dependencies {
 	testImplementation 'org.springframework.data:spring-data-redis'
 	implementation project(':api-rest')
     implementation project(':model')
+    // Traces to Tempo through Alloy (MANAGEMENT_OTLP_TRACING_ENDPOINT in docker-compose); nothing is sent without it.
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
     implementation project(':usecase')
     implementation 'org.springframework.boot:spring-boot-starter'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
