@@ -11,7 +11,10 @@ import co.com.finova.transfer.usecase.gettransfer.GetTransferUseCase;
 import co.com.finova.transfer.usecase.handlewalletresult.HandleWalletResultUseCase;
 import co.com.finova.transfer.usecase.relayoutbox.RelayOutboxUseCase;
 import co.com.finova.transfer.usecase.saga.SagaOutbox;
+import co.com.finova.transfer.usecase.sweeptimeouts.SagaTimeouts;
+import co.com.finova.transfer.usecase.sweeptimeouts.SweepTimeoutsUseCase;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,12 +31,18 @@ class UseCasesConfigTest {
 
     @Test
     void registersTheUseCasesAndTheirSharedPieces() {
-        try (var context = new AnnotationConfigApplicationContext(Ports.class)) {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            // Spring Boot's conversions, so "30s" in @Value becomes a Duration as in the running service.
+            context.getBeanFactory().setConversionService(ApplicationConversionService.getSharedInstance());
+            context.register(Ports.class);
+            context.refresh();
             assertThat(context.getBean(CreateTransferUseCase.class)).isNotNull();
             assertThat(context.getBean(HandleWalletResultUseCase.class)).isNotNull();
             assertThat(context.getBean(GetTransferUseCase.class)).isNotNull();
             assertThat(context.getBean(RelayOutboxUseCase.class)).isNotNull();
+            assertThat(context.getBean(SweepTimeoutsUseCase.class)).isNotNull();
             assertThat(context.getBean(SagaOutbox.class)).isNotNull();
+            assertThat(context.getBean(SagaTimeouts.class)).isEqualTo(SagaTimeouts.SPEC);
             assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
         }
     }

@@ -50,3 +50,12 @@ adapters:
     relay-enabled: true
     relay-interval: "100ms"
     batch-size: 100
+  saga:
+    # Spec §4.6 rule 8: the timeout sweeper runs every 2 s. Timeouts: 30 s for a PENDING DebitWallet, 10 s for each
+    # CreditWallet attempt (3 attempts), 30 s between ReverseDebit resends.
+    sweeper-enabled: true
+    sweep-interval: "2s"
+    sweep-batch-size: 100
+    pending-timeout: "30s"
+    credit-timeout: "10s"
+    reverse-resend: "30s"
