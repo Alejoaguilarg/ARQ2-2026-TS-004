@@ -93,7 +93,7 @@ the root `.env` file (see `.env.example`).
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | set by the compose | `wallet_db` connection (`WALLET_DB_USER`, `WALLET_DB_PASSWORD` in `.env`) |
 | `SPRING_DATA_REDIS_HOST`, `SPRING_DATA_REDIS_PORT` | `localhost`, `6379` | Redis connection |
 | `SPRING_DATA_REDIS_TIMEOUT`, `SPRING_DATA_REDIS_CONNECT_TIMEOUT` | `200ms` | After this the balance read falls back to `wallet_db` |
-| `SPRING_RABBITMQ_HOST`, `SPRING_RABBITMQ_PORT`, `SPRING_RABBITMQ_VIRTUAL_HOST`, `SPRING_RABBITMQ_USERNAME`, `SPRING_RABBITMQ_PASSWORD`, `SPRING_RABBITMQ_SSL_ENABLED` | host, port, username and password set by the compose; vhost `/` and no TLS by default | RabbitMQ connection |
+| `SPRING_RABBITMQ_HOST`, `SPRING_RABBITMQ_PORT`, `SPRING_RABBITMQ_VIRTUAL_HOST`, `SPRING_RABBITMQ_USERNAME`, `SPRING_RABBITMQ_PASSWORD`, `SPRING_RABBITMQ_SSL_ENABLED` | the local `rabbitmq` container, vhost `/`, no TLS | RabbitMQ connection. The compose fills them from `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST` and `RABBITMQ_SSL_ENABLED` in `.env` (see [Cloud broker](#cloud-broker-optional)) |
 | `ADAPTERS_RABBITMQ_MAX_RETRIES` | `3` | Retries before the `.dlq` (S1) |
 | `ADAPTERS_RABBITMQ_CONFIRM_TIMEOUT` | `5s` | Wait for a publisher confirm |
 | `ADAPTERS_OUTBOX_RELAY_ENABLED`, `ADAPTERS_OUTBOX_RELAY_INTERVAL`, `ADAPTERS_OUTBOX_BATCH_SIZE` | `true`, `100ms`, `100` | Outbox relay (S3) |
@@ -114,6 +114,31 @@ check it from inside the container:
 ```bash
 docker compose exec -T wallet-service wget -qO- http://localhost:8080/actuator/health
 ```
+
+### Cloud broker (optional)
+
+**The local broker is the default, and it is the setup for the delivery.** Without the `RABBITMQ_*` connection
+variables below in `.env`, the compose connects every service to the local `rabbitmq` container, whose topology
+`rabbitmq-init` loads from `infra/rabbitmq/definitions.json`.
+
+To run against the team's cloud broker instead, set these in your own `.env` (never in a committed file; see the
+commented lines in `.env.example`) and start the stack as above:
+
+| Variable in `.env` | Value |
+|---|---|
+| `RABBITMQ_HOST` | The broker host |
+| `RABBITMQ_PORT` | The TLS port of the broker (usually `5671`) |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | The broker credentials |
+| `RABBITMQ_VHOST` | The broker vhost (on shared cloud plans it is usually not `/`) |
+| `RABBITMQ_SSL_ENABLED` | `true` |
+
+- The service never declares queues, exchanges or bindings. The topology of spec §4.2 (quorum queues, `.retry` and
+  `.dlq` queues) must already exist in that vhost; if a queue is missing, the service fails at startup.
+- **Only one machine may run each service against the cloud broker at a time.** Two Wallets on the same vhost
+  compete for `wallet.commands.q`, each with its own `wallet_db`, so commands would be applied against the wrong
+  database (for example, a debit answered with `SENDER_WALLET_NOT_FOUND`).
+- Spring AMQP logs the connection target (user, host, port and vhost, never the password) when it connects.
+- The tests never use the cloud broker: they run against a local RabbitMQ in Testcontainers.
 
 ## Observability
 
