@@ -102,8 +102,9 @@ Every log line also carries `[traceId,spanId]` after the correlationId:
 WARN 1 --- [identity-service] [nio-8080-exec-2] [b76d46ee-654b-4484-b481-39a755cd6b11] [fae888b5cb92f5f5f46a5587bd4f8f49,4e77f5a79774d381] ... : Login rejected: invalid credentials
 ```
 
-A trace covers one HTTP request. The saga does not continue it through RabbitMQ: the outbox relay publishes later, on
-another thread, and the outbox row does not keep the trace context. Follow a transfer across Transfer, Wallet, Audit and
+A trace covers one HTTP request. Wallet carries `traceparent` in the AMQP headers and its listeners continue an incoming
+trace (wallet-service README), but the saga is still not one trace: Transfer's outbox relay publishes later, on another
+thread, and the outbox row does not keep the trace context. Follow a transfer across Transfer, Wallet, Audit and
 Notification by its `correlationId`, which every message carries (spec.md §4.1). Notification has no HTTP API, so it sends
 no traces.
 
