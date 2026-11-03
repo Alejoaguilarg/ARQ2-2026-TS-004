@@ -1,7 +1,7 @@
 package co.com.finova.transfer.rabbitmqpublisher;
 
 import co.com.finova.transfer.model.message.MessagePublishException;
-import co.com.finova.transfer.model.message.envelope.MessageEnvelope;
+import co.com.finova.transfer.model.message.OutboundMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.Message;
@@ -13,7 +13,6 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,9 +25,8 @@ import static org.mockito.Mockito.verify;
 
 class RabbitMQMessagePublisherTest {
 
-    private static final MessageEnvelope MESSAGE = new MessageEnvelope(
-            "msg-1", "transfer.completed", "corr-1", "t-1", "transfer-service",
-            "transfer.events", "transfer.completed", Instant.now(), "{\"transferId\":\"t-1\"}");
+    private static final OutboundMessage MESSAGE = new OutboundMessage(
+            "msg-1", "corr-1", "wallet.commands", "debit", "{\"transferId\":\"t-1\"}");
 
     private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
     private final RabbitMQMessagePublisher publisher =
@@ -41,12 +39,12 @@ class RabbitMQMessagePublisherTest {
         publisher.publish(MESSAGE);
 
         ArgumentCaptor<Message> sent = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("transfer.events"), eq("transfer.completed"), sent.capture(), any(CorrelationData.class));
+        verify(rabbitTemplate).send(eq("wallet.commands"), eq("debit"), sent.capture(), any(CorrelationData.class));
         MessageProperties properties = sent.getValue().getMessageProperties();
         assertThat(properties.getMessageId()).isEqualTo("msg-1");
         assertThat(properties.getCorrelationId()).isEqualTo("corr-1");
         assertThat(properties.getDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
-        assertThat(new String(sent.getValue().getBody(), StandardCharsets.UTF_8)).isEqualTo(MESSAGE.getPayload().toString());
+        assertThat(new String(sent.getValue().getBody(), StandardCharsets.UTF_8)).isEqualTo(MESSAGE.payload());
     }
 
     @Test
@@ -62,7 +60,7 @@ class RabbitMQMessagePublisherTest {
     void failsWhenMessageIsUnroutable() {
         brokerAnswers(correlation -> {
             correlation.setReturned(new ReturnedMessage(
-                    new Message(new byte[0]), 312, "NO_ROUTE", "transfer.events", "transfer.debited"));
+                    new Message(new byte[0]), 312, "NO_ROUTE", "wallet.commands", "debit"));
             correlation.getFuture().complete(new CorrelationData.Confirm(true, null));
         });
 
