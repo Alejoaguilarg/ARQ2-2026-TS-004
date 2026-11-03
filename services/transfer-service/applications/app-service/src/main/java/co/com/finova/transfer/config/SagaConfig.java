@@ -1,9 +1,14 @@
 package co.com.finova.transfer.config;
 
 import co.com.finova.transfer.model.common.gateways.IdGenerator;
+import co.com.finova.transfer.model.common.gateways.TransactionRunner;
 import co.com.finova.transfer.model.outbox.gateways.OutboxRepository;
+import co.com.finova.transfer.model.processedmessage.gateways.ProcessedMessageRepository;
+import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.saga.SagaOutbox;
-import co.com.finova.transfer.usecase.sweeptimeouts.SagaTimeouts;
+import co.com.finova.transfer.usecase.saga.SagaTimeouts;
+import co.com.finova.transfer.usecase.saga.TransferSaga;
+import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,5 +30,15 @@ public class SagaConfig {
                                      @Value("${adapters.saga.credit-timeout:10s}") Duration credit,
                                      @Value("${adapters.saga.reverse-resend:30s}") Duration reverseResend) {
         return new SagaTimeouts(pending, credit, reverseResend);
+    }
+
+    @Bean
+    public TransferSaga transferSaga(TransferRepository transfers,
+                                     ProcessedMessageRepository processedMessages,
+                                     SagaOutbox saga,
+                                     TransactionRunner transactions,
+                                     IdGenerator ids,
+                                     Clock clock) {
+        return new TransferSaga(transfers, processedMessages, saga, transactions, ids, clock);
     }
 }
