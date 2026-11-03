@@ -4,6 +4,7 @@
 |---|---|---|
 | 3.2.0 | 2026-10-19 | Aligned with TS-004 (sections 2–4, ADRs 001–006) and the C4 Container Diagram |
 | 3.3.0 | 2026-11-01 | `LedgerEntry`: `OPENING` type for initial balances; ledger protected against updates and deletes |
+| 3.4.0 | 2026-11-03 | Documents the decisions the implementation already follows (audit of `main`, section C type 1 and section D): web client, management port, outbox relay retries (§4.10), consumer rules (§4.11), Wallet cache rebuild and health (§4.12), edge cases of §3, recipient lookup in scope |
 
 This file is the contract that Wave 2 code is validated against. It follows the structure required by section 5 of the Tech Spec template:
 
@@ -13,7 +14,7 @@ This file is the contract that Wave 2 code is validated against. It follows the 
 4. Asynchronous events and integration contracts
 5. Requirements and scenarios (WHEN / THEN) for the 5 mandatory features
 
-Sources: TS-004 and its ADRs (001 Hexagonal + Spring Boot, 002 Orchestrated Saga + Outbox, 003 Idempotency at the Gateway, 004 CQRS balance, 005 Hash-chained audit, 006 PostgreSQL per service) and `docs/assets/c4-containers.png`.
+Sources: TS-004 and its ADRs (001 Hexagonal + Spring Boot, 002 Orchestrated Saga + Outbox, 003 Idempotency at the Gateway, 004 CQRS balance, 005 Hash-chained audit, 006 PostgreSQL per service) and the C4 diagrams `docs/assets/finova-C4-context.png` (level 1) and `docs/assets/finova-C4.png` (level 2).
 
 ---
 
@@ -23,7 +24,7 @@ Sources: TS-004 and its ADRs (001 Hexagonal + Spring Boot, 002 Orchestrated Saga
 
 | Container | Technology | Responsibility | Data store |
 |---|---|---|---|
-| **API Gateway** | Spring Cloud Gateway | Single entry point. Validates the JWT with Identity's JWKS and checks its revocation, applies rate limiting and lockout, verifies the financial session on `POST /transfers`, runs the idempotency pre-check, injects `X-Correlation-Id`, routes, and publishes every rejected, duplicate or failed transfer attempt to `audit.events`. | Redis |
+| **API Gateway** | Java 21, Spring Cloud Gateway Server MVC | Single entry point. Validates the JWT with Identity's JWKS and checks its revocation, applies rate limiting and lockout, verifies the financial session on `POST /transfers`, runs the idempotency pre-check, injects `X-Correlation-Id`, routes, and publishes every rejected, duplicate or failed transfer attempt to `audit.events`. | Redis |
 | **Identity Service** | Java 21, Spring Boot | Users, devices and sessions; login (argon2 password hashes); 15-minute access tokens; rotating, device-bound 7-day refresh tokens (session revocation on reuse); financial session through step-up (PIN or OTP); JWKS. Owner of user contact data. | `identity_db` + Redis (revoked JTIs and sessions) |
 | **Wallet Service** | Java 21, Spring Boot | Wallet aggregate and ledger; conditional atomic debit, credit and reversal, idempotent per `transferId`; settles each debited transfer exactly once (credit or reversal); maintains the balance read model in Redis; serves the balance endpoint. | `wallet_db` + Redis (balance read model) |
 | **Transfer Service** | Java 21, Spring Boot | Transfer aggregate and state machine, saga orchestrator (debit → credit → complete, or compensate), transactional outbox, idempotency-key uniqueness as defense in depth. | `transfer_db` |
@@ -33,10 +34,11 @@ Sources: TS-004 and its ADRs (001 Hexagonal + Spring Boot, 002 Orchestrated Saga
 
 ### 1.2 Clients
 
-- **Mobile/Web App** (Wallet User): generates one `Idempotency-Key` per transfer intent and reuses it on every retry, sends `Authorization: Bearer` and `X-Financial-Session`, disables the button while the request is in flight, and follows the transfer at `GET /transfers/{transferId}`.
-- **Admin Dashboard** (Operations/Compliance Analyst, role `AUDITOR`): queries audit records and verifies the hash chain.
+- **Web App** (React single-page app served by nginx), one client for both roles:
+  - **Wallet User:** generates one `Idempotency-Key` per transfer intent and reuses it on every retry, together with the same financial session, sends `Authorization: Bearer` and `X-Financial-Session`, disables the button while the request is in flight, and follows the transfer at `GET /transfers/{transferId}`.
+  - **Operations/Compliance Analyst** (role `AUDITOR`): its Activity screen queries audit records and verifies the hash chain.
 
-Both clients talk only to the API Gateway over HTTPS/JSON.
+The web app talks only to the API Gateway: nginx forwards `/api/*` to it on the same origin, so the browser needs no CORS. A mobile app would follow the same contract.
 
 ### 1.3 Infrastructure
 
@@ -45,13 +47,13 @@ Both clients talk only to the API Gateway over HTTPS/JSON.
 | Message broker | RabbitMQ (durable quorum queues, publisher confirms, manual acks, one retry queue and one DLQ per queue) | Saga commands and replies, domain events, audit events |
 | Cache / fast store | Redis 7 (AOF + replica) | Idempotency records, revoked JTIs and sessions, consumed financial sessions, rate-limit and lockout counters, balance read model |
 | Databases | PostgreSQL 16, one per service (Flyway migrations) | ACID state, outbox, ledger, audit |
-| Observability | Prometheus, Loki, Grafana | Metrics and logs from every container; `correlationId` links one transfer across services |
+| Observability | Prometheus, Loki, Tempo, Alloy, Grafana | Metrics (Prometheus scrapes `/actuator/prometheus`), logs (Alloy ships container logs to Loki), traces (OTLP to Tempo through Alloy); `correlationId` links one transfer across services and `[traceId,spanId]` in each log line links it to its trace |
 
 ### 1.4 Integration rules
 
-- Only the API Gateway is exposed outside the Docker network. Services trust the identity headers in §1.5 only because they are reachable exclusively through the Gateway.
+- Only the API Gateway and the web app that proxies to it are exposed outside the Docker network. Services trust the identity headers in §1.5 only because they are reachable exclusively through the Gateway. The Gateway's own health and metrics answer on a separate management port (9090) that is not published.
 - No service reads another service's database. No service calls another over HTTP to move money: integration is only client → Gateway → service (REST) and service ↔ service through RabbitMQ.
-- Every state change that emits a message writes it to `outbox_messages` in the same local transaction (Transfer, Wallet). A relay publishes pending rows with publisher confirms and marks them as published. The Gateway has no outbox: it publishes audit events directly, with local retry.
+- Every state change that emits a message writes it to `outbox_messages` in the same local transaction (Transfer, Wallet). A relay publishes pending rows with publisher confirms and marks them as published (§4.10). The Gateway has no outbox: it publishes audit events directly, with local retry.
 - Delivery is at-least-once, so every consumer is idempotent.
 - `transferId` (when it applies) and `correlationId` travel in every message and every log line.
 
@@ -63,14 +65,14 @@ Both clients talk only to the API Gateway over HTTPS/JSON.
 | Currency | ISO 4217; only `COP` |
 | IDs | UUID v4 |
 | Timestamps | RFC 3339, UTC |
-| Identity headers forwarded by the Gateway | `X-User-Id`, `X-Device-Id`, `X-User-Roles`, `X-Correlation-Id` (any value sent by the client is stripped) |
+| Identity headers forwarded by the Gateway | `X-User-Id`, `X-Device-Id`, `X-User-Roles`, `X-Correlation-Id` (any value sent by the client is stripped). A service that receives a request without a valid `X-User-Id` answers `500 INTERNAL_ERROR` and logs an ERROR: it can only mean the Gateway failed to inject it. The `X-Correlation-Id` response header is set by the Gateway |
 | Errors | `ErrorResponse` (§3.2) |
 
 ### 1.6 Scope
 
 - Every user in Identity has exactly one wallet in a single currency (COP).
-- Out of scope for this design: user registration and onboarding, wallet creation, PIN and OTP enrolment, recipient discovery (the app already knows the recipient's `userId`), deposits and withdrawals.
-- Provisioned in advance with the initial data set: users, devices, PIN hashes, OTP secrets, wallets with their initial balances (each one recorded as an `OPENING` ledger entry), and the recipients' contact data in Notification.
+- Out of scope for this design: user registration and onboarding, wallet creation, PIN and OTP enrolment, deposits and withdrawals. Recipient discovery is limited to resolving an exact email to a `userId` (`POST /users/lookup`, §3.12).
+- Provisioned in advance with the initial data set: users, PIN hashes, OTP secrets, wallets with their initial balances (each positive balance recorded as an `OPENING` ledger entry; a wallet provisioned with balance 0 has no `OPENING` entry and its balance is still the sum of its ledger, 0), and the recipients' contact data in Notification. Devices are not provisioned: Identity registers a device the first time a user signs in with its `deviceId`.
 - OTP means a 6-digit time-based one-time password (TOTP, RFC 6238) generated by an authenticator app from the provisioned secret.
 
 ---
@@ -110,10 +112,12 @@ components:
 
     RefreshToken:
       description: >
-        Rotating, bound to one device, lifetime 7 days. All the refresh tokens issued from one
+        Rotating, bound to one device, lifetime 7 days from its own issue (each rotation issues a
+        new 7-day token; a session has no absolute maximum). All the refresh tokens issued from one
         login on one device form a family; the family is the user's session on that device and
         its familyId is the sid claim of every access token issued in it. Presenting a ROTATED
-        token revokes the whole family (session).
+        token revokes the whole family (session). REVOKED is final: refreshing with an ACTIVE token
+        of a family that has any REVOKED token is refused and revokes the family again.
       type: object
       required: [tokenId, familyId, userId, deviceId, status, expiresAt]
       properties:
@@ -268,6 +272,9 @@ components:
         payload:     { type: object, description: "JSONB with the full MessageEnvelope (§4.1)" }
         createdAt:   { type: string, format: date-time }
         publishedAt: { type: string, format: date-time, nullable: true, description: "Set to null again by the sweeper to republish the same message (§4.6)" }
+        attempts:      { type: integer, description: "Failed publishes so far (§4.10); 0 for a new row" }
+        nextAttemptAt: { type: string, format: date-time, nullable: true, description: "Not published again before this time (§4.10); null = due now" }
+        lastError:     { type: string, nullable: true, description: "First 500 characters of the last publish error" }
 
     ProcessedMessage:
       description: >
@@ -286,11 +293,15 @@ components:
     # ================= Audit (audit_db) =================
     AuditRecord:
       description: >
-        Table audit_records, partitioned monthly. The service role has INSERT and SELECT only;
-        a trigger rejects UPDATE, DELETE and TRUNCATE.
+        Table audit_records, partitioned monthly. The service logs in with its own role, which
+        has INSERT and SELECT only and is neither the owner nor a superuser (migrations run as
+        the owner); a trigger rejects UPDATE, DELETE and TRUNCATE for every role.
         hash = SHA-256(prevHash || canonicalJson(record without prevHash and hash)).
         Genesis prevHash = 64 zeros. Records are inserted by a single active consumer, so seq
-        defines one total order.
+        defines one total order. canonicalJson = compact JSON with keys sorted, no whitespace,
+        timestamps as yyyy-MM-ddTHH:mm:ss.ffffffZ and amounts normalized ("0150.00" -> "150.00");
+        Python's json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        produces the same string. The Gateway's requestHash (§3.1.1) uses the same canonical form.
       type: object
       required: [seq, eventId, source, stage, outcome, correlationId, occurredAt, recordedAt, prevHash, hash]
       properties:
@@ -368,7 +379,7 @@ components:
 | `fail:stepup:{userId}`, `lock:stepup:{userId}` | Gateway | Failed step-up counter / lock flag | 900 s |
 | `balance:{userId}` | Wallet (projection consumer and cache-miss path) | Hash `{walletId, available, currency, version, asOf}` | None |
 
-`balance:{userId}` is always written with a Lua compare-and-set: only if `incoming.version > stored.version` or the key does not exist. Both the projection consumer and the cache-miss path use it, so a late write never overwrites a newer balance.
+`balance:{userId}` is always written with a Lua compare-and-set: only if `incoming.version > stored.version` or the key does not exist. Both the projection consumer and the cache-miss path use it, so a late write never overwrites a newer balance. On a cache miss, `asOf` is the wallet row's `updated_at`.
 
 ---
 
@@ -387,6 +398,12 @@ Every request goes through the API Gateway, which applies these steps in order. 
 | 5 | **Route:** strip client identity headers, inject `X-Correlation-Id`, `X-User-Id`, `X-Device-Id`, `X-User-Roles`, and forward. | `502` / `504 UPSTREAM_UNAVAILABLE` |
 | 6 | **Audit:** every `POST /transfers` rejected in steps 1–4, answered as a duplicate, or failed in step 5 (Transfer answered 5xx or did not answer) publishes `AttemptRecorded` (source `GATEWAY`) to `audit.events` (§4.8). | — |
 
+**Order of steps 3 and 4.** When `Idempotency-Key` is missing or not a UUID, step 3 is skipped and step 4 answers `400 IDEMPOTENCY_KEY_REQUIRED`: claiming the financial session for an invalid key would burn it.
+
+**Retry after the financial session expired.** A stored answer is replayed for 24 h (step 4), but the financial session lives 5 minutes and step 3 runs before the replay. A retry of the same intent after those 5 minutes therefore needs a new step-up; with the new session and the same key it still gets the original answer, never a second transfer.
+
+**Upstream timeout.** A route that does not answer within the read timeout answers `504 UPSTREAM_UNAVAILABLE`, whatever form the HTTP client's timeout takes; a refused or reset connection answers `502`. Both free the idempotency key (§3.1.1).
+
 **Redis unavailable.** Steps 1–4 depend on Redis. If Redis is unavailable, the Gateway fails closed: `POST /transfers` answers `503 IDEMPOTENCY_STORE_UNAVAILABLE` (ADR 003) and every other route answers `503 SECURITY_STORE_UNAVAILABLE`, because token revocation, rate limits and lockout cannot be verified. The same answers apply when Identity's JWKS cannot be fetched and no cached key matches the token's `kid`. No request is routed without these checks.
 
 #### 3.1.1 Idempotency pre-check (ADR 003)
@@ -402,7 +419,7 @@ The checks are evaluated in this order:
 | Key missing or not a UUID | `400 IDEMPOTENCY_KEY_REQUIRED`; not routed | `REJECTED` / `MISSING_KEY` |
 | Key exists with a different hash (whatever the state) | `422 IDEMPOTENCY_KEY_REUSED` | `REJECTED` / `KEY_REUSED` |
 | Key exists, same hash, `IN_PROGRESS` | `409 IDEMPOTENCY_IN_PROGRESS` | `DUPLICATE` / `IN_PROGRESS_CONFLICT` |
-| Key exists, same hash, `COMPLETED` | Replay the stored status and body with header `Idempotent-Replayed: true` | `DUPLICATE` / `DUPLICATE_REPLAYED` |
+| Key exists, same hash, `COMPLETED` | Replay the stored status and body with header `Idempotent-Replayed: true` (not `Location`); the 24 h TTL starts again | `DUPLICATE` / `DUPLICATE_REPLAYED` |
 | Key created | Route the request. When Transfer answers 2xx or 4xx, store `{state: COMPLETED, requestHash, httpStatus, body}` (same TTL). When Transfer answers 5xx or does not answer, delete the key so the client can retry with the same key. | Transfer records `ACCEPTED`; on 5xx or no answer the Gateway records `FAILED` (§4.8) |
 | Redis unavailable | `503 IDEMPOTENCY_STORE_UNAVAILABLE`; not routed (fail closed) | `REJECTED` / `IDEMPOTENCY_STORE_UNAVAILABLE` |
 
@@ -411,13 +428,15 @@ The checks are evaluated in this order:
 - same `requestHash` → Transfer answers `202` with the **existing** transfer (same `transferId`) and `Idempotent-Replayed: true`; no new transfer is created (audit `DUPLICATE` / `DUPLICATE_TRANSFER`);
 - different `requestHash` → `422 IDEMPOTENCY_KEY_REUSED`.
 
+A body that fails validation is answered `400 VALIDATION_ERROR` even when its key was already used: validation comes before the key lookup in Transfer.
+
 Wallet operations are also idempotent per `transferId` (§4.7).
 
 #### 3.1.2 Rate limiting and lockout
 
 | Scope | Limit | Response |
 |---|---|---|
-| `POST /auth/login`, `POST /auth/refresh` | 10 req/min per client IP | `429 RATE_LIMIT_EXCEEDED` |
+| `POST /auth/login`, `POST /auth/refresh` | 10 req/min per client IP, one counter shared by both routes | `429 RATE_LIMIT_EXCEEDED` |
 | Failed logins | 5 per account in 15 min → login locked for 15 min | `423 ACCOUNT_LOCKED` |
 | Failed financial-session challenges | 5 per user in 15 min → step-up locked for 15 min | `423 STEP_UP_LOCKED` |
 | `POST /auth/financial-session` | 10 req/min per user | `429 RATE_LIMIT_EXCEEDED` |
@@ -446,6 +465,8 @@ Wallet operations are also idempotent per `transferId` (§4.7).
 | GET | `/audit/records` | Audit | Bearer, role `AUDITOR` |
 | GET | `/audit/verify` | Audit | Bearer, role `AUDITOR` |
 | POST | `/users/lookup` | Identity | Bearer |
+
+Routes match exactly these methods and paths. Any other method or path, including other endpoints of the same services, answers `404` without reaching a service. The Gateway's `/actuator/health` and `/actuator/prometheus` are served only on its management port (9090, internal).
 
 **Internal endpoint (not routed by the Gateway):** `GET /.well-known/jwks.json` on Identity. Authentication: none, reachable only inside the Docker network. Request body: none. Responses: `200` with the JSON Web Key Set (`{"keys":[{"kty":"RSA","kid":"2026-10","use":"sig","alg":"RS256","n":"...","e":"AQAB"}]}`); `500 INTERNAL_ERROR`. The Gateway caches the keys and refreshes them when it sees an unknown `kid`.
 
@@ -485,7 +506,7 @@ Every error response uses `ErrorResponse`:
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | Gateway | Same key still in progress |
 | `PAYLOAD_TOO_LARGE` | 413 | Gateway | Body of `POST /auth/login` or `POST /transfers` larger than 16 KB |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | Gateway / Transfer | Same key, different body |
-| `ACCOUNT_LOCKED` | 423 | Gateway | Login lockout active |
+| `ACCOUNT_LOCKED` | 423 | Gateway / Identity | Login lockout active (Gateway), or the account itself has status `LOCKED` (Identity) |
 | `STEP_UP_LOCKED` | 423 | Gateway | Step-up lockout active |
 | `RATE_LIMIT_EXCEEDED` | 429 | Gateway | Rate limit exceeded |
 | `INTERNAL_ERROR` | 500 | Any | Unexpected error |
@@ -755,8 +776,8 @@ Authorization: Bearer eyJhbGciOi...
 ### 3.10 `GET /audit/records`
 
 - **Authentication:** Bearer, role `AUDITOR` (checked by the Gateway and again by Audit).
-- **Request body:** none. **Query:** `transferId`, `userId`, `from`, `to` (date-time), `page` (default 0), `size` (default 50, max 200). At least one of `transferId`, `userId`, `from` is required.
-- **Behavior:** read-only query on `audit_db`; results ordered by `seq` ascending (chronological).
+- **Request body:** none. **Query:** `transferId`, `userId`, `from`, `to` (date-time), `page` (default 0), `size` (default 50, max 200; a larger value is `400 VALIDATION_ERROR`, not trimmed). At least one of `transferId`, `userId`, `from` is required.
+- **Behavior:** read-only query on `audit_db`; `from` and `to` filter on `occurredAt`; results ordered by `seq` ascending (chronological).
 - **Responses:**
 
   | Status | Code / meaning |
@@ -900,6 +921,8 @@ Content-Type: application/json
 
 `messageId` is also the AMQP `message-id` property. Consumers deduplicate on it (`processed_messages`, or the table named in §4.3).
 
+`producer` is the service name: `api-gateway`, `transfer-service` or `wallet-service`. How consumers read the envelope (unknown fields, an envelope `transferId` that differs from the payload's) is in §4.11.
+
 ### 4.2 Topology
 
 | Exchange (type) | Routing keys | Queue → Consumer | Retry queue | DLQ |
@@ -912,7 +935,7 @@ Content-Type: application/json
 
 All queues are durable quorum queues with manual acks; producers use publisher confirms.
 
-**Retries with backoff.** On a technical error the consumer rejects the message without requeue. The queue dead-letters it to its `.retry` queue (message TTL 5 s), which dead-letters it back to the original queue. The consumer reads the `x-death` count; when it reaches the retry limit of the queue (§4.5), it publishes the message to the `.dlq` queue and acks it. Every message in a DLQ raises an alert.
+**Retries with backoff.** On a technical error the consumer rejects the message without requeue. The queue dead-letters it to its `.retry` queue (message TTL 5 s), which dead-letters it back to the original queue. The consumer reads the `x-death` count; when it reaches the retry limit of the queue (§4.5), it publishes the message to the `.dlq` queue and acks it. Every message in a DLQ raises an alert. How the retries are counted, and which messages skip them, is in §4.11.
 
 ### 4.3 Event catalog
 
@@ -943,7 +966,7 @@ asyncapi: 2.6.0
 id: 'urn:finova:messaging'
 info:
   title: Finova messaging contracts
-  version: 3.2.0
+  version: 3.4.0
   description: Message contracts between the Finova services over RabbitMQ (TS-004, ADR 002).
 defaultContentType: application/json
 
@@ -1133,7 +1156,7 @@ components:
           walletId:  { type: string, format: uuid }
           userId:    { $ref: '#/components/schemas/UserRef' }
           available: { $ref: '#/components/schemas/Money' }
-          version:   { type: integer, description: "Monotonic per wallet; the envelope occurredAt is stored as asOf" }
+          version:   { type: integer, description: "Monotonic per wallet; the envelope occurredAt is stored as asOf. There is no currency field: the projection stores COP, the only currency (§1.5)" }
 
     # ---- Outcomes: Transfer -> Notification ----
     TransferCompleted:
@@ -1239,6 +1262,8 @@ Each operation runs in one local transaction in `wallet_db`, together with its l
   - already `CREDITED` → no reversal; `WalletCredited` is re-emitted and the transfer completes;
   - already `REVERSED` → nothing is applied; `DebitReversed` is re-emitted.
 - **Idempotency:** `processed_messages` plus `UNIQUE(transfer_id, type)` in the ledger plus `transfer_settlements`. A repeated command never re-applies a balance change.
+- **Inconsistent commands** (they would mean a bug in Transfer, never a normal retry): a `DebitWallet` with a new `messageId` for a `transferId` that was already debited, or a `CreditWallet` / `ReverseDebit` without a previous `DEBIT` of the same amount (for the reversal, from the sender's wallet). They are not applied and go straight to the DLQ (§4.11).
+- A `ReverseDebit` that finds the transfer already `REVERSED` re-emits `DebitReversed` without a new `AttemptRecorded`.
 - The Redis balance is never used to authorize a debit.
 
 ### 4.8 Audited attempts
@@ -1247,18 +1272,21 @@ Each operation runs in one local transaction in `wallet_db`, together with its l
 |---|---|---|
 | Gateway | `REQUEST` / `REJECTED` (`MISSING_KEY`) | `400 IDEMPOTENCY_KEY_REQUIRED` |
 | Gateway | `REQUEST` / `REJECTED` (`KEY_REUSED`) | `422 IDEMPOTENCY_KEY_REUSED` |
+| Gateway | `REQUEST` / `REJECTED` (`PAYLOAD_TOO_LARGE`) | `413 PAYLOAD_TOO_LARGE` |
 | Gateway | `REQUEST` / `REJECTED` (error code) | `POST /transfers` rejected in steps 1–3 or with Redis unavailable: `401`, `403`, `429`, `503` |
 | Gateway | `REQUEST` / `DUPLICATE` (`IN_PROGRESS_CONFLICT`) | `409 IDEMPOTENCY_IN_PROGRESS` |
 | Gateway | `REQUEST` / `DUPLICATE` (`DUPLICATE_REPLAYED`) | Stored response replayed |
 | Gateway | `REQUEST` / `FAILED` (`UPSTREAM_UNAVAILABLE`, `INTERNAL_ERROR`) | Transfer answered 5xx or did not answer. If Transfer had created the transfer, its own `ACCEPTED` record also exists. |
 | Transfer | `REQUEST` / `ACCEPTED` | Transfer created as `PENDING` |
-| Transfer | `REQUEST` / `DUPLICATE` (`DUPLICATE_TRANSFER`) | Existing key reached Transfer; existing transfer returned |
-| Transfer | `REQUEST` / `REJECTED` (`VALIDATION_ERROR`, `SELF_TRANSFER_NOT_ALLOWED`, `IDEMPOTENCY_KEY_REUSED`) | Invalid request |
+| Transfer | `REQUEST` / `DUPLICATE` (`DUPLICATE_TRANSFER`) | Existing key reached Transfer; existing transfer returned. The record carries the original request's `correlationId` |
+| Transfer | `REQUEST` / `REJECTED` (`VALIDATION_ERROR`, `SELF_TRANSFER_NOT_ALLOWED`, `IDEMPOTENCY_KEY_REUSED`) | Invalid request. A missing `Idempotency-Key` that reaches Transfer (only by bypassing the Gateway) is a `VALIDATION_ERROR` |
 | Wallet | `DEBIT` / `APPLIED` or `REJECTED` (`INSUFFICIENT_FUNDS`, `SENDER_WALLET_NOT_FOUND`) | Debit processed |
 | Wallet | `CREDIT` / `APPLIED` or `FAILED` (`RECIPIENT_WALLET_NOT_FOUND`, `TRANSFER_REVERSED`) | Credit processed |
 | Transfer | `CREDIT` / `FAILED` (`CREDIT_TIMEOUT`) | A `CreditWallet` attempt got no reply within 10 s |
 | Wallet | `REVERSAL` / `APPLIED` or `REJECTED` (`ALREADY_CREDITED`) | Reversal processed |
 | Transfer | `TRANSFER` / `COMPLETED`, `REJECTED` or `COMPENSATED` | Terminal state reached (`COMPENSATED` = `REVERSED`) |
+
+The Gateway's records always have `amount = null`: it does not parse the transfer body. Transfer's and Wallet's records carry the amount.
 
 ### 4.9 Notification rules
 
@@ -1269,6 +1297,29 @@ Each operation runs in one local transaction in `wallet_db`, together with its l
 | `TransferReversed` | Sender |
 
 Notification resolves each `userId` in `recipient_contacts` and sends through `preferredChannel` to the external provider (a mock in Wave 2). Each notification has one row in `notification_log`. A provider failure sets it to `FAILED` and the message is retried from the queue (§4.2); a successful retry updates the same row to `SENT`. A failure never affects the transfer.
+
+- A user without a row in `recipient_contacts` cannot be notified: the message goes to the DLQ and no `notification_log` row is written.
+- The provider is called first and the row is marked `SENT` afterwards. A crash between the two steps sends the same notification again on redelivery: at-least-once, never lost.
+
+### 4.10 Outbox relay (Transfer and Wallet)
+
+- Each service runs a relay every 100 ms that takes up to 100 pending rows (`published_at IS NULL`, partial index), oldest first (`ORDER BY created_at`) with `FOR UPDATE SKIP LOCKED`, so two instances never publish the same row. Interval and batch size are configurable (`ADAPTERS_OUTBOX_RELAY_INTERVAL`, `ADAPTERS_OUTBOX_BATCH_SIZE`). Reason: ADR 002 targets a saga under 1 s, and a transfer goes through about 4 relay hops.
+- A row is marked published only after the broker confirms it (publisher confirms; an unroutable message counts as a failure).
+- **A row that cannot be published never blocks the others:** the failure is stored in `attempts`, `next_attempt_at` and `last_error` (§2 `OutboxMessage`); the row is skipped until `next_attempt_at`, which starts 1 s later and doubles after each failure up to 5 min (`ADAPTERS_OUTBOX_RETRY_INITIAL_DELAY`, `ADAPTERS_OUTBOX_RETRY_MAX_DELAY`). It is never dropped, and the run that hit the failure ends, so a broker outage costs one confirm timeout per run. A retried row may go out after newer ones: no queue requires ordering (§4.5).
+- A sweeper resend (§4.6 rule 8) also clears `next_attempt_at`, so it is due at once.
+
+### 4.11 Consumer rules (every queue)
+
+- **Counting retries:** the retry limit of §4.5 counts the retries after the first delivery (limit 3 = 4 deliveries). Only the `x-death` entry of the main queue with `reason = rejected` counts; the `expired` entry the `.retry` queue adds is ignored.
+- **Messages that are never retried:** invalid JSON, a `type` that is unknown or does not belong to that queue, and contract violations (for example the inconsistent Wallet commands of §4.7) go straight to the `.dlq`: published with confirm, then acked, with a log line carrying the `correlationId`. No `processed_messages` row is written, so the message can be replayed from the DLQ once the cause is fixed. Retries are for technical errors only.
+- **Tolerant reader:** fields that are not in the schema are ignored, in the envelope and in the payload; the required ones are validated.
+- **`transferId` in the envelope and in the payload:** in a command, an envelope `transferId` that differs from the payload's makes the message invalid (straight to the DLQ). It does not apply to `BalanceChanged`, which has no `transferId`.
+
+### 4.12 Wallet: cache rebuild and health
+
+- **Rebuild job** (ADR 004): at startup and then every 5 min (configurable, and it can be turned off) it pages through `wallets` and writes every balance with the compare-and-set of §2.1, so it never overwrites a newer version (F2.4). If Redis fails it stops the run and the next run tries again. It also repairs a `BalanceChanged` that ended in the DLQ.
+- **Redis timeouts:** 200 ms for commands and for the connection (`SPRING_DATA_REDIS_TIMEOUT`, `SPRING_DATA_REDIS_CONNECT_TIMEOUT`), so a slow Redis falls back to `wallet_db` quickly (F2.6).
+- **Health:** Redis is not part of Wallet's `/actuator/health`. With Redis down the service stays `UP`, because the balance is read from `wallet_db` (F2.6) and money never depends on Redis. PostgreSQL and RabbitMQ stay in the health check; a Redis outage shows in Redis's own healthcheck and in the WARN of the fallback.
 
 ---
 
