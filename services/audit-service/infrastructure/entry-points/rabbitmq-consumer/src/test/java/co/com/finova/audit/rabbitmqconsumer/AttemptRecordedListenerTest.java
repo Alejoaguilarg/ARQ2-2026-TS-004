@@ -53,6 +53,24 @@ class AttemptRecordedListenerTest {
     }
 
     @Test
+    void theAttemptIdsAreInTheLogContextOnlyWhileItIsHandled() throws Exception {
+        String transferId = "a1b2c3d4-e5f6-4890-abcd-ef1234567890";
+        Map<String, String> logContext = new java.util.HashMap<>();
+        when(recordAttempt.handle(any(AttemptRecorded.class))).thenAnswer(invocation -> {
+            logContext.putAll(org.slf4j.MDC.getCopyOfContextMap());
+            return RecordOutcome.recorded(EVENT_ID, 1);
+        });
+
+        listener.onMessage(message(VALID.replace("\"source\"", "\"transferId\":\"" + transferId + "\",\"source\""),
+                null), channel);
+
+        assertEquals("5d0f3f0e-8a4b-4a39-9a51-0f1c1b2a7e11", logContext.get("correlationId"));
+        assertEquals(transferId, logContext.get("transferId"));
+        assertEquals(null, org.slf4j.MDC.get("correlationId"));
+        assertEquals(null, org.slf4j.MDC.get("transferId"));
+    }
+
+    @Test
     void acksAStoredAttempt() throws Exception {
         when(recordAttempt.handle(any(AttemptRecorded.class))).thenReturn(RecordOutcome.recorded(EVENT_ID, 1));
 
