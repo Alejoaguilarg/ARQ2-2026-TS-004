@@ -143,6 +143,11 @@ describe('read', () => {
     [{ outcome: 'ACCEPTED', userId: '99999999-0000-4000-8000-000000000000' }, 'Cliente 99999999 pidió enviar dinero'],
   ])('reads %j', (over, what) => expect(read(record(1, over)).what).toBe(what));
 
+  it('tells a blocked request from a rejected one', () => {
+    expect(read(record(1, { source: 'GATEWAY', outcome: 'REJECTED' })).badge).toBe('Bloqueado');
+    expect(read(record(1, { source: 'WALLET', stage: 'DEBIT', outcome: 'REJECTED' })).badge).toBe('Rechazado');
+  });
+
   it('turns a day into its bounds and ignores anything else', () => {
     expect(dayBound('2026-11-03', false)).toBe(new Date('2026-11-03T00:00:00').toISOString());
     expect(dayBound('2026-11-03', true)).toBe(new Date('2026-11-03T23:59:59.999').toISOString());
