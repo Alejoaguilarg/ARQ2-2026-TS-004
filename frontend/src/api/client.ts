@@ -81,3 +81,8 @@ function toError(response: Response, json: unknown): ApiError {
 function fallbackCode(status: number): string {
   return status === 502 || status === 504 ? 'UPSTREAM_UNAVAILABLE' : 'INTERNAL_ERROR';
 }
+
+// Anything a call can throw, as an ApiError: a failure that is not an answer reads as a lost connection.
+export function asApiError(e: unknown): ApiError {
+  return e instanceof ApiFailure ? e.error : { status: 0, code: 'NETWORK_ERROR', message: String(e) };
+}

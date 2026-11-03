@@ -5,6 +5,7 @@ import type { Session } from './auth/session';
 import { Backdrop } from './components';
 import { AppShell } from './layout/AppShell';
 import { navigate, PATHS, usePath } from './router';
+import { WalletPage } from './wallet/WalletPage';
 
 function Screens() {
   const { status, user } = useAuth();
@@ -33,7 +34,7 @@ function Screens() {
       {path === PATHS.activity ? (
         <section className="glass placeholder"><h1>Actividad de envíos</h1></section>
       ) : (
-        <section className="glass placeholder"><h1>Tu billetera</h1></section>
+        <WalletPage />
       )}
     </AppShell>
   );

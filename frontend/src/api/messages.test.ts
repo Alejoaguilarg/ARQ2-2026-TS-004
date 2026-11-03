@@ -6,7 +6,10 @@ const error = (code: string, extra = {}) => ({ status: 400, code, message: 'x', 
 describe('friendly', () => {
   it('never shows the code and always gives a next step', () => {
     for (const code of ['INVALID_CREDENTIALS', 'ACCOUNT_LOCKED', 'RATE_LIMIT_EXCEEDED', 'SECURITY_STORE_UNAVAILABLE',
-      'IDEMPOTENCY_STORE_UNAVAILABLE', 'UPSTREAM_UNAVAILABLE', 'NETWORK_ERROR', 'VALIDATION_ERROR', 'INTERNAL_ERROR']) {
+      'IDEMPOTENCY_STORE_UNAVAILABLE', 'UPSTREAM_UNAVAILABLE', 'NETWORK_ERROR', 'VALIDATION_ERROR', 'INTERNAL_ERROR',
+      'STEP_UP_FAILED', 'STEP_UP_LOCKED', 'FINANCIAL_SESSION_REQUIRED', 'FINANCIAL_SESSION_INVALID', 'FINANCIAL_SESSION_EXPIRED',
+      'FINANCIAL_SESSION_USED', 'SELF_TRANSFER_NOT_ALLOWED', 'IDEMPOTENCY_IN_PROGRESS', 'IDEMPOTENCY_KEY_REUSED', 'USER_NOT_FOUND',
+      'WALLET_NOT_FOUND', 'TRANSFER_NOT_FOUND', 'FORBIDDEN_ROLE']) {
       const message = friendly(error(code));
       expect(message.title + message.text).not.toContain(code);
       expect(message.text.length).toBeGreaterThan(10);
