@@ -115,6 +115,10 @@ trace, **Logs for this span** goes back to Loki. A service adds tracing with two
 `io.micrometer:micrometer-tracing-bridge-otel` and `io.opentelemetry:opentelemetry-exporter-otlp`, plus the log
 pattern above.
 
+The same traces are also in **Jaeger** (http://localhost:16686): Alloy exports each trace to both Tempo and
+Jaeger. Pick a service and **Find Traces**; **System Architecture** draws the dependencies between services. Jaeger keeps
+the traces in memory, so they are gone after the container restarts. The log-to-trace link in Grafana goes to Tempo.
+
 ## Alerts
 
 Rules in `infra/observability/prometheus/alerts.yml`, evaluated by Prometheus every 15 s. There is no Alertmanager:

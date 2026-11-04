@@ -64,7 +64,7 @@ docker-compose.yml        # (Wave 2) local orchestration
 ```bash
 cp .env.example .env
 
-# Infrastructure only: 5 PostgreSQL DBs, Redis (primary + replica), RabbitMQ (topology from spec.md §4.2), Prometheus, Loki, Tempo, Alloy, Grafana
+# Infrastructure only: 5 PostgreSQL DBs, Redis (primary + replica), RabbitMQ (topology from spec.md §4.2), Prometheus, Loki, Tempo, Jaeger, Alloy, Grafana
 docker compose up -d
 
 # One service plus the infrastructure it depends on
@@ -84,6 +84,7 @@ docker compose --profile apps down -v
 | http://localhost:15672 | RabbitMQ management |
 | http://localhost:9090 | Prometheus |
 | http://localhost:3000 | Grafana: Prometheus, Loki and Tempo datasources plus the "Finova - Overview" dashboard |
+| http://localhost:16686 | Jaeger: the same traces as Tempo, in Jaeger's UI (in memory, lost on restart) |
 
 Tests named `*IntegrationTest` start real containers with Testcontainers, so Docker must be running for `./gradlew build`.
 
