@@ -35,7 +35,7 @@ loki.write "local" {
   }
 }
 
-// Receives OTLP traces from the services and forwards them to Tempo.
+// Receives OTLP traces from the services and forwards them to Tempo and Jaeger.
 otelcol.receiver.otlp "default" {
   grpc {
     endpoint = "0.0.0.0:4317"
@@ -52,13 +52,23 @@ otelcol.receiver.otlp "default" {
 
 otelcol.processor.batch "default" {
   output {
-    traces = [otelcol.exporter.otlp.tempo.input]
+    traces = [otelcol.exporter.otlp.tempo.input, otelcol.exporter.otlp.jaeger.input]
   }
 }
 
 otelcol.exporter.otlp "tempo" {
   client {
     endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+
+otelcol.exporter.otlp "jaeger" {
+  client {
+    endpoint = "jaeger:4317"
 
     tls {
       insecure = true
