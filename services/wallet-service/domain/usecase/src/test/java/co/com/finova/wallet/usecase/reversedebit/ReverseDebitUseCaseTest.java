@@ -21,6 +21,8 @@ import co.com.finova.wallet.model.processedmessage.ProcessedMessage;
 import co.com.finova.wallet.model.settlement.SettlementOutcome;
 import co.com.finova.wallet.model.settlement.TransferSettlement;
 import co.com.finova.wallet.model.wallet.Wallet;
+import co.com.finova.wallet.usecase.command.CommandOutcome;
+import co.com.finova.wallet.usecase.command.CommandOutcome.Settlement;
 import co.com.finova.wallet.usecase.command.WalletCommandSupport;
 import co.com.finova.wallet.usecase.support.InMemoryPorts;
 import org.junit.jupiter.api.AfterEach;
@@ -73,8 +75,9 @@ class ReverseDebitUseCaseTest {
     void appliedReversalRestoresSenderAndWritesLedgerResultBalanceChangedAndAudit() {
         MessageEnvelope<ReverseDebit> command = command(ReverseReason.CREDIT_TIMEOUT, "150000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.DEBIT_REVERSED, Settlement.CLAIMED, false));
         assertThat(transactions.count).isEqualTo(1);
         assertThat(settlements.rows.get(transferId))
                 .isEqualTo(new TransferSettlement(transferId, SettlementOutcome.REVERSED, NOW));
@@ -123,8 +126,10 @@ class ReverseDebitUseCaseTest {
                 NOW.minusSeconds(30), credited));
         MessageEnvelope<ReverseDebit> command = command(ReverseReason.CREDIT_TIMEOUT, "150000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(
+                new CommandOutcome(MessageType.WALLET_CREDITED, Settlement.ALREADY_CREDITED, false));
         assertThat(wallets.of(senderId).balance()).isEqualTo(Money.parse("350000.00"));
         assertThat(ledger.ofType(LedgerEntryType.REVERSAL)).isEmpty();
         assertThat(settlements.rows.get(transferId).outcome()).isEqualTo(SettlementOutcome.CREDITED);
@@ -145,8 +150,10 @@ class ReverseDebitUseCaseTest {
         int changes = wallets.changes;
         MessageEnvelope<ReverseDebit> resent = command(ReverseReason.CREDIT_TIMEOUT, "150000.00");
 
-        useCase.handle(resent);
+        CommandOutcome outcome = useCase.handle(resent);
 
+        assertThat(outcome).isEqualTo(
+                new CommandOutcome(MessageType.DEBIT_REVERSED, Settlement.ALREADY_REVERSED, false));
         assertThat(wallets.changes).isEqualTo(changes);
         assertThat(ledger.ofType(LedgerEntryType.REVERSAL)).hasSize(1);
         assertThat(outbox.types()).containsExactly(MessageType.DEBIT_REVERSED);
@@ -164,8 +171,9 @@ class ReverseDebitUseCaseTest {
         Object original = outbox.payload(0);
         outbox.messages.clear();
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.DEBIT_REVERSED, Settlement.NOT_APPLICABLE, true));
         assertThat(processed.saves).isEqualTo(1);
         assertThat(ledger.ofType(LedgerEntryType.REVERSAL)).hasSize(1);
         assertThat(outbox.types()).containsExactly(MessageType.DEBIT_REVERSED);

@@ -20,6 +20,8 @@ import co.com.finova.wallet.model.settlement.TransferSettlement;
 import co.com.finova.wallet.model.settlement.gateways.TransferSettlementRepository;
 import co.com.finova.wallet.model.wallet.Wallet;
 import co.com.finova.wallet.model.wallet.gateways.WalletRepository;
+import co.com.finova.wallet.usecase.command.CommandOutcome;
+import co.com.finova.wallet.usecase.command.CommandOutcome.Settlement;
 import co.com.finova.wallet.usecase.command.WalletCommandSupport;
 
 import java.time.Clock;
@@ -49,10 +51,10 @@ public class ReverseDebitUseCase {
         this.support = new WalletCommandSupport(processedMessages, outbox, transactions, ids, clock, LOG);
     }
 
-    public void handle(MessageEnvelope<ReverseDebit> command) {
+    public CommandOutcome handle(MessageEnvelope<ReverseDebit> command) {
         Contract.requireNonNull(command, "command");
         ReverseDebit reversal = command.payload();
-        support.run(command, reversal.transferId(), context -> reverse(context, reversal));
+        return support.run(command, reversal.transferId(), context -> reverse(context, reversal));
     }
 
     private void reverse(WalletCommandSupport.Context context, ReverseDebit reversal) {
@@ -66,6 +68,7 @@ public class ReverseDebitUseCase {
         Optional<TransferSettlement> winner = settlements.claim(
                 TransferSettlement.reversed(reversal.transferId(), context.now()));
         if (winner.isEmpty()) {
+            context.settled(Settlement.CLAIMED);
             Wallet walletAfter = wallets.increaseBalance(sender.walletId(), reversal.amount(), context.now());
             ledger.append(LedgerEntry.reversal(context.newId(), reversal.transferId(), reversal.amount(), walletAfter,
                     context.now()));
@@ -75,12 +78,14 @@ public class ReverseDebitUseCase {
             context.log("ReverseDebit applied: reason=" + reversal.reason() + " version=" + walletAfter.version());
         } else if (winner.get().outcome() == SettlementOutcome.CREDITED) {
             // The credit won: no reversal; the original WalletCredited is re-emitted and the transfer completes.
+            context.settled(Settlement.ALREADY_CREDITED);
             context.reply(context.storedResult(MessageType.WALLET_CREDITED));
             context.audit(AttemptStage.REVERSAL, AttemptOutcome.REJECTED, ALREADY_CREDITED, reversal.userId(),
                     reversal.amount());
             context.log("ReverseDebit rejected: " + ALREADY_CREDITED + ", original WalletCredited re-emitted");
         } else {
             // Already reversed: nothing is applied and nothing is audited (decision taken with the team lead).
+            context.settled(Settlement.ALREADY_REVERSED);
             context.reply(context.storedResult(MessageType.DEBIT_REVERSED));
             context.log("ReverseDebit: transfer already reversed, original DebitReversed re-emitted");
         }

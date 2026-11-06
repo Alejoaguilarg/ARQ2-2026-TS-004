@@ -18,8 +18,14 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+      # W3C trace context (traceparent) in the AMQP headers of every published message, never in the §4.1
+      # envelope, as in Wallet. Override with SPRING_RABBITMQ_TEMPLATE_OBSERVATION_ENABLED.
+      observation-enabled: true
     listener:
       simple:
+        # The listener continues the trace of an incoming message that carries traceparent.
+        # Override with SPRING_RABBITMQ_LISTENER_SIMPLE_OBSERVATION_ENABLED.
+        observation-enabled: true
         # Spec §4.2: manual acks; a rejected delivery is never requeued, so the queue dead-letters it to its
         # .retry queue (5 s) and it comes back. The listener only consumes the existing queue.
         acknowledge-mode: "manual"
@@ -40,6 +46,11 @@ management:
     health:
       probes:
         enabled: true
+  observations:
+    enable:
+      # The outbox relay runs every 100 ms and the sweeper every 2 s: one trace per run would bury the real ones,
+      # and every message the relay publishes would hang from a span Alloy drops (as in Wallet).
+      "[tasks.scheduled.execution]": false
 adapters:
   rabbitmq:
     confirm-timeout: "5s"

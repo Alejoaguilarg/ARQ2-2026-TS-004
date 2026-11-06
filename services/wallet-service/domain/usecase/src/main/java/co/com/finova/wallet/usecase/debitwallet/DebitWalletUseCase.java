@@ -17,6 +17,7 @@ import co.com.finova.wallet.model.outbox.gateways.OutboxRepository;
 import co.com.finova.wallet.model.processedmessage.gateways.ProcessedMessageRepository;
 import co.com.finova.wallet.model.wallet.Wallet;
 import co.com.finova.wallet.model.wallet.gateways.WalletRepository;
+import co.com.finova.wallet.usecase.command.CommandOutcome;
 import co.com.finova.wallet.usecase.command.WalletCommandSupport;
 
 import java.time.Clock;
@@ -46,10 +47,11 @@ public class DebitWalletUseCase {
         this.support = new WalletCommandSupport(processedMessages, outbox, transactions, ids, clock, LOG);
     }
 
-    public void handle(MessageEnvelope<DebitWallet> command) {
+    /** A debit never claims transfer_settlements, so its settlement is always NOT_APPLICABLE. */
+    public CommandOutcome handle(MessageEnvelope<DebitWallet> command) {
         Contract.requireNonNull(command, "command");
         DebitWallet debit = command.payload();
-        support.run(command, debit.transferId(), context -> debit(context, debit));
+        return support.run(command, debit.transferId(), context -> debit(context, debit));
     }
 
     private void debit(WalletCommandSupport.Context context, DebitWallet debit) {

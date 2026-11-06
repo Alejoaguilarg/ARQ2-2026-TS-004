@@ -57,17 +57,14 @@ public final class WalletCommandSupport {
     }
 
     /**
-     * Runs the command in one transaction. A ledger conflict or a missing DEBIT rolls everything back,
-     * is logged as an error and is rethrown; the consumer sends such a command straight to the DLQ
-     * (decision S2: retrying it can never succeed).
+     * Runs the command in one transaction and returns what it did (for the listener span only).
+     * A ledger conflict or a missing DEBIT rolls everything back, is logged as an error and is rethrown;
+     * the consumer sends such a command straight to the DLQ (decision S2: retrying it can never succeed).
      */
-    public <P extends MessagePayload> void run(MessageEnvelope<P> command, UUID transferId,
-                                               Consumer<Context> handler) {
+    public <P extends MessagePayload> CommandOutcome run(MessageEnvelope<P> command, UUID transferId,
+                                                         Consumer<Context> handler) {
         try {
-            transactions.inTransaction(() -> {
-                execute(command, transferId, handler);
-                return null;
-            });
+            return transactions.inTransaction(() -> execute(command, transferId, handler));
         } catch (DuplicateLedgerEntryException | DebitMismatchException e) {
             log.log(System.Logger.Level.ERROR, () -> command.type().contractName() + " rejected: " + e.getMessage()
                     + " correlationId=" + command.correlationId()
@@ -87,8 +84,8 @@ public final class WalletCommandSupport {
         return entry;
     }
 
-    private <P extends MessagePayload> void execute(MessageEnvelope<P> command, UUID transferId,
-                                                    Consumer<Context> handler) {
+    private <P extends MessagePayload> CommandOutcome execute(MessageEnvelope<P> command, UUID transferId,
+                                                              Consumer<Context> handler) {
         // One clock read per transaction, truncated to the microseconds PostgreSQL stores: wallets.updated_at
         // and every occurredAt of the transaction (BalanceChanged included) are then exactly the same instant.
         Context context = new Context(command, transferId, clock.instant().truncatedTo(ChronoUnit.MICROS));
@@ -98,9 +95,10 @@ public final class WalletCommandSupport {
             context.publish(storedResult);
             context.log(command.type().contractName() + " repeated: stored "
                     + storedResult.type().contractName() + " republished");
-            return;
+            return new CommandOutcome(storedResult.type(), CommandOutcome.Settlement.NOT_APPLICABLE, true);
         }
         handler.accept(context);
+        return new CommandOutcome(context.result, context.settlement, false);
     }
 
     /** The command being handled, inside its transaction. */
@@ -109,6 +107,8 @@ public final class WalletCommandSupport {
         private final MessageEnvelope<?> command;
         private final UUID transferId;
         private final Instant now;
+        private MessageType result;
+        private CommandOutcome.Settlement settlement = CommandOutcome.Settlement.NOT_APPLICABLE;
 
         private Context(MessageEnvelope<?> command, UUID transferId, Instant now) {
             this.command = command;
@@ -128,6 +128,12 @@ public final class WalletCommandSupport {
         public void reply(MessagePayload result) {
             processedMessages.save(ProcessedMessage.withResult(command.messageId(), CONSUMER, now, result));
             publish(result);
+            this.result = result.type();
+        }
+
+        /** What happened to transfer_settlements; only reported in the outcome (NOT_APPLICABLE by default). */
+        public void settled(CommandOutcome.Settlement settlement) {
+            this.settlement = settlement;
         }
 
         /** Writes a message to the outbox in a new Wallet envelope. */

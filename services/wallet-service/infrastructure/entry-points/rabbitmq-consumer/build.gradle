@@ -5,4 +5,7 @@ dependencies {
     implementation project(':message-json')
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    // Business tags on the listener span (the observation Spring AMQP opens per delivery).
+    implementation 'io.micrometer:micrometer-observation'
+    testImplementation 'io.micrometer:micrometer-observation-test'
 }

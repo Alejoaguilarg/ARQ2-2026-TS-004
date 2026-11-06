@@ -26,6 +26,8 @@ import co.com.finova.wallet.model.processedmessage.ProcessedMessage;
 import co.com.finova.wallet.model.processedmessage.gateways.ProcessedMessageRepository;
 import co.com.finova.wallet.model.wallet.Wallet;
 import co.com.finova.wallet.model.wallet.gateways.WalletRepository;
+import co.com.finova.wallet.usecase.command.CommandOutcome;
+import co.com.finova.wallet.usecase.command.CommandOutcome.Settlement;
 import co.com.finova.wallet.usecase.support.InMemoryPorts;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,8 +90,9 @@ class DebitWalletUseCaseTest {
         Wallet wallet = wallets.add(userId, "500000.00", 3);
         MessageEnvelope<DebitWallet> command = command("150000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.WALLET_DEBITED, Settlement.NOT_APPLICABLE, false));
         assertThat(transactions.count).isEqualTo(1);
 
         assertThat(ledger.entries).singleElement().satisfies(entry -> {
@@ -146,8 +149,9 @@ class DebitWalletUseCaseTest {
         wallets.add(userId, "50000.00", 2);
         MessageEnvelope<DebitWallet> command = command("80000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.DEBIT_REJECTED, Settlement.NOT_APPLICABLE, false));
         DebitRejected expected = new DebitRejected(transferId, userId, DebitRejectionReason.INSUFFICIENT_FUNDS);
         assertThat(ledger.entries).isEmpty();
         assertThat(wallets.byUser.get(userId).balance()).isEqualTo(Money.parse("50000.00"));
@@ -181,8 +185,9 @@ class DebitWalletUseCaseTest {
         Object firstResult = outbox.payload(0);
         outbox.messages.clear();
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.WALLET_DEBITED, Settlement.NOT_APPLICABLE, true));
         assertThat(transactions.count).isEqualTo(2);
         assertThat(ledger.entries).hasSize(1);
         assertThat(wallets.debitCalls).isEqualTo(1);

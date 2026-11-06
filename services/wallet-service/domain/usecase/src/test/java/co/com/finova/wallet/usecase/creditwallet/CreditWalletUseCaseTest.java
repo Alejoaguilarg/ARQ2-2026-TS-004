@@ -21,6 +21,8 @@ import co.com.finova.wallet.model.processedmessage.ProcessedMessage;
 import co.com.finova.wallet.model.settlement.SettlementOutcome;
 import co.com.finova.wallet.model.settlement.TransferSettlement;
 import co.com.finova.wallet.model.wallet.Wallet;
+import co.com.finova.wallet.usecase.command.CommandOutcome;
+import co.com.finova.wallet.usecase.command.CommandOutcome.Settlement;
 import co.com.finova.wallet.usecase.command.WalletCommandSupport;
 import co.com.finova.wallet.usecase.support.InMemoryPorts;
 import org.junit.jupiter.api.AfterEach;
@@ -74,8 +76,9 @@ class CreditWalletUseCaseTest {
         Wallet recipient = wallets.add(recipientId, "100000.00", 5);
         MessageEnvelope<CreditWallet> command = command(1, "150000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.WALLET_CREDITED, Settlement.CLAIMED, false));
         assertThat(transactions.count).isEqualTo(1);
         assertThat(settlements.rows.get(transferId))
                 .isEqualTo(new TransferSettlement(transferId, SettlementOutcome.CREDITED, NOW));
@@ -120,8 +123,9 @@ class CreditWalletUseCaseTest {
     void missingRecipientWalletFailsWithoutClaimingTheSettlement() {
         MessageEnvelope<CreditWallet> command = command(2, "150000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.CREDIT_FAILED, Settlement.NOT_APPLICABLE, false));
         CreditFailed expected = new CreditFailed(transferId, recipientId, 2,
                 CreditFailureReason.RECIPIENT_WALLET_NOT_FOUND);
         assertThat(settlements.rows).isEmpty();
@@ -143,8 +147,10 @@ class CreditWalletUseCaseTest {
         int changes = wallets.changes;
         MessageEnvelope<CreditWallet> secondAttempt = command(2, "150000.00");
 
-        useCase.handle(secondAttempt);
+        CommandOutcome outcome = useCase.handle(secondAttempt);
 
+        assertThat(outcome).isEqualTo(
+                new CommandOutcome(MessageType.WALLET_CREDITED, Settlement.ALREADY_CREDITED, false));
         assertThat(wallets.changes).isEqualTo(changes);
         assertThat(ledger.ofType(LedgerEntryType.CREDIT)).hasSize(1);
         assertThat(outbox.types()).containsExactly(MessageType.WALLET_CREDITED);
@@ -161,8 +167,10 @@ class CreditWalletUseCaseTest {
         settlements.rows.put(transferId, TransferSettlement.reversed(transferId, NOW.minusSeconds(60)));
         MessageEnvelope<CreditWallet> command = command(3, "150000.00");
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(
+                new CommandOutcome(MessageType.CREDIT_FAILED, Settlement.ALREADY_REVERSED, false));
         CreditFailed expected = new CreditFailed(transferId, recipientId, 3, CreditFailureReason.TRANSFER_REVERSED);
         assertThat(wallets.of(recipientId).balance()).isEqualTo(Money.parse("100000.00"));
         assertThat(ledger.ofType(LedgerEntryType.CREDIT)).isEmpty();
@@ -181,8 +189,9 @@ class CreditWalletUseCaseTest {
         Object original = outbox.payload(0);
         outbox.messages.clear();
 
-        useCase.handle(command);
+        CommandOutcome outcome = useCase.handle(command);
 
+        assertThat(outcome).isEqualTo(new CommandOutcome(MessageType.WALLET_CREDITED, Settlement.NOT_APPLICABLE, true));
         assertThat(processed.saves).isEqualTo(1);
         assertThat(ledger.ofType(LedgerEntryType.CREDIT)).hasSize(1);
         assertThat(outbox.types()).containsExactly(MessageType.WALLET_CREDITED);

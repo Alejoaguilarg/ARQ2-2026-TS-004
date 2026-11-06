@@ -4,6 +4,7 @@ import co.com.finova.transfer.messagejson.MessageJsonMapper;
 import co.com.finova.transfer.model.message.MessageEnvelope;
 import co.com.finova.transfer.usecase.handlewalletresult.HandleWalletResultUseCase;
 import com.rabbitmq.client.Channel;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Wallet results on transfer.wallet-events.q (spec §4.2, §4.6): reads the envelope and hands it to the saga, which
  * owns every business rule. The queue already exists; nothing is declared here.
+ * The delivery span gets transfer.id and message.type (see {@link SpanTags}).
  */
 @Component
 public class WalletEventsListener {
@@ -23,12 +25,14 @@ public class WalletEventsListener {
     private final MessageJsonMapper json;
     private final DeliveryOutcomeHandler outcomes;
     private final HandleWalletResultUseCase handleResult;
+    private final SpanTags spanTags;
 
     public WalletEventsListener(MessageJsonMapper json, DeliveryOutcomeHandler outcomes,
-                                HandleWalletResultUseCase handleResult) {
+                                HandleWalletResultUseCase handleResult, ObservationRegistry observations) {
         this.json = json;
         this.outcomes = outcomes;
         this.handleResult = handleResult;
+        this.spanTags = new SpanTags(observations);
     }
 
     @RabbitListener(queues = QUEUE)
@@ -37,6 +41,8 @@ public class WalletEventsListener {
             outcomes.process(message, channel, QUEUE, () -> {
                 MessageEnvelope<?> envelope = json.readInbound(new String(message.getBody(), StandardCharsets.UTF_8));
                 logContext.fill(envelope);
+                spanTags.put(SpanTags.TRANSFER_ID, envelope.transferId());
+                spanTags.put(SpanTags.MESSAGE_TYPE, envelope.type().contractName());
                 handleResult.handle(envelope);
             });
         }

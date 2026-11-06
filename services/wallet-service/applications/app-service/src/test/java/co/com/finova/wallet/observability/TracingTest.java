@@ -2,15 +2,21 @@ package co.com.finova.wallet.observability;
 
 import co.com.finova.wallet.messaging.MessagingTestBase;
 import com.rabbitmq.client.AMQP;
+import io.micrometer.common.KeyValue;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.amqp.core.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -21,7 +27,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,18 +39,42 @@ import static org.assertj.core.api.Assertions.assertThat;
  * trace context travels in the AMQP headers (never in the §4.1 envelope), log lines end with [traceId,spanId] after
  * [correlationId] [transferId], and an unreachable collector never slows the service down.
  * The endpoint is a host that does not resolve, like Alloy when it is not running.
+ * The command listener span carries business tags (observability only; the spec does not define them).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "management.tracing.sampling.probability=1.0",
         "management.otlp.tracing.endpoint=http://otlp-collector.invalid:4318/v1/traces"})
 @AutoConfigureObservability
 @ExtendWith(OutputCaptureExtension.class)
+@Import(TracingTest.Recording.class)
 class TracingTest extends MessagingTestBase {
 
     private static final String TRACEPARENT = "^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$";
 
     @Autowired
     private TestRestTemplate http;
+
+    @Autowired
+    private RecordedObservations recorded;
+
+    @Test
+    void theCommandListenerSpanCarriesTheTransferAndWhatTheWalletDid() {
+        UUID userId = UUID.randomUUID();
+        givenWallet(userId, "500000.00");
+        UUID transferId = UUID.randomUUID();
+
+        publishRaw("wallet.commands", "debit", debitCommand(UUID.randomUUID(), transferId, userId), Map.of());
+
+        await("listener observation", Duration.ofSeconds(10), () -> recorded.listener(transferId).isPresent());
+        Observation.Context listener = recorded.listener(transferId).orElseThrow();
+        assertThat(value(listener.getHighCardinalityKeyValue("message.type"))).isEqualTo("DebitWallet");
+        assertThat(value(listener.getHighCardinalityKeyValue("wallet.operation"))).isEqualTo("DEBIT");
+        assertThat(value(listener.getHighCardinalityKeyValue("wallet.result"))).isEqualTo("WalletDebited");
+        assertThat(value(listener.getHighCardinalityKeyValue("wallet.settlement"))).isEqualTo("NOT_APPLICABLE");
+        assertThat(value(listener.getHighCardinalityKeyValue("wallet.replayed"))).isEqualTo("false");
+        assertThat(listener.getLowCardinalityKeyValue("transfer.id"))
+                .as("transfer.id never reaches the spring.rabbit.listener metric").isNull();
+    }
 
     @Test
     void messagesTheWalletPublishesCarryTheTraceContextInTheirHeaders() {
@@ -139,5 +172,41 @@ class TracingTest extends MessagingTestBase {
     private static String lineContaining(CapturedOutput output, String text) {
         return output.getOut().lines().filter(line -> line.contains(text)).findFirst()
                 .orElseThrow(() -> new AssertionError("no log line contains: " + text));
+    }
+
+    private static String value(KeyValue keyValue) {
+        return keyValue == null ? null : keyValue.getValue();
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class Recording {
+        @Bean
+        RecordedObservations recordedObservations() {
+            return new RecordedObservations();
+        }
+    }
+
+    /** Every observation the service stops, as the tracing handler sees it (Spring Boot registers handler beans). */
+    static class RecordedObservations implements ObservationHandler<Observation.Context> {
+
+        private final Queue<Observation.Context> stopped = new ConcurrentLinkedQueue<>();
+
+        @Override
+        public boolean supportsContext(Observation.Context context) {
+            return true;
+        }
+
+        @Override
+        public void onStop(Observation.Context context) {
+            stopped.add(context);
+        }
+
+        Optional<Observation.Context> listener(UUID transferId) {
+            return stopped.stream()
+                    .filter(context -> "spring.rabbit.listener".equals(context.getName()))
+                    .filter(context -> transferId.toString().equals(value(context.getHighCardinalityKeyValue(
+                            "transfer.id"))))
+                    .findFirst();
+        }
     }
 }

@@ -21,6 +21,8 @@ import co.com.finova.wallet.model.settlement.TransferSettlement;
 import co.com.finova.wallet.model.settlement.gateways.TransferSettlementRepository;
 import co.com.finova.wallet.model.wallet.Wallet;
 import co.com.finova.wallet.model.wallet.gateways.WalletRepository;
+import co.com.finova.wallet.usecase.command.CommandOutcome;
+import co.com.finova.wallet.usecase.command.CommandOutcome.Settlement;
 import co.com.finova.wallet.usecase.command.WalletCommandSupport;
 
 import java.time.Clock;
@@ -49,10 +51,10 @@ public class CreditWalletUseCase {
         this.support = new WalletCommandSupport(processedMessages, outbox, transactions, ids, clock, LOG);
     }
 
-    public void handle(MessageEnvelope<CreditWallet> command) {
+    public CommandOutcome handle(MessageEnvelope<CreditWallet> command) {
         Contract.requireNonNull(command, "command");
         CreditWallet credit = command.payload();
-        support.run(command, credit.transferId(), context -> credit(context, credit));
+        return support.run(command, credit.transferId(), context -> credit(context, credit));
     }
 
     private void credit(WalletCommandSupport.Context context, CreditWallet credit) {
@@ -67,6 +69,7 @@ public class CreditWalletUseCase {
         Optional<TransferSettlement> winner = settlements.claim(
                 TransferSettlement.credited(credit.transferId(), context.now()));
         if (winner.isEmpty()) {
+            context.settled(Settlement.CLAIMED);
             Wallet walletAfter = wallets.increaseBalance(recipient.get().walletId(), credit.amount(), context.now());
             ledger.append(LedgerEntry.credit(context.newId(), credit.transferId(), credit.amount(), walletAfter,
                     context.now()));
@@ -76,10 +79,12 @@ public class CreditWalletUseCase {
             context.log("CreditWallet applied: attempt=" + credit.attempt() + " version=" + walletAfter.version());
         } else if (winner.get().outcome() == SettlementOutcome.CREDITED) {
             // A later attempt: nothing is applied and nothing is audited; the original result is re-emitted.
+            context.settled(Settlement.ALREADY_CREDITED);
             context.reply(context.storedResult(MessageType.WALLET_CREDITED));
             context.log("CreditWallet attempt=" + credit.attempt() + ": transfer already credited,"
                     + " original WalletCredited re-emitted");
         } else {
+            context.settled(Settlement.ALREADY_REVERSED);
             fail(context, credit, CreditFailureReason.TRANSFER_REVERSED);
         }
     }
