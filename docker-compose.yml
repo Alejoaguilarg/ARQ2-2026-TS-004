@@ -352,6 +352,10 @@ services:
     networks: [backend]
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      # A link from each trace to its log lines in Grafana (infra/observability/jaeger/ui-config.json).
+      QUERY_UI_CONFIG: /etc/jaeger/ui-config.json
+    volumes:
+      - ./infra/observability/jaeger/ui-config.json:/etc/jaeger/ui-config.json:ro
     ports:
       - "127.0.0.1:16686:16686"
 

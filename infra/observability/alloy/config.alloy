@@ -46,6 +46,24 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
+    traces = [otelcol.processor.filter.noise.input]
+  }
+}
+
+// Drops only the spans that bury the real ones: @Scheduled runs ("task <bean>.<method>", e.g. Transfer's outbox
+// relay every 100 ms) and the healthcheck and Prometheus scrapes. Spans of a transfer never match: their HTTP uri is
+// /transfers..., and AMQP spans have no uri. A condition that cannot be evaluated keeps the span (error_mode).
+otelcol.processor.filter "noise" {
+  error_mode = "ignore"
+
+  traces {
+    span = [
+      `IsMatch(name, "^task ")`,
+      `IsMatch(attributes["uri"], "^/actuator/(health|prometheus)(/.*)?$")`,
+    ]
+  }
+
+  output {
     traces = [otelcol.processor.batch.default.input]
   }
 }

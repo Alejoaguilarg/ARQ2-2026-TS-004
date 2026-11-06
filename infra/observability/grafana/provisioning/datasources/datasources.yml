@@ -21,6 +21,16 @@ datasources:
           matcherRegex: '\[([0-9a-f]{32}),[0-9a-f]{16}\]'
           datasourceUid: tempo
           url: '$${__value.raw}'
+        # Same trace in the second viewer.
+        - name: jaegerTraceId
+          matcherRegex: '\[([0-9a-f]{32}),[0-9a-f]{16}\]'
+          datasourceUid: jaeger
+          url: '$${__value.raw}'
+        # Every log line of the transfer, in every service (the use cases end their lines with transferId=<uuid>).
+        - name: transferId
+          matcherRegex: 'transferId=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+          datasourceUid: loki
+          url: '{service=~".+"} |= "$${__value.raw}"'
 
   - name: Tempo
     type: tempo
@@ -35,3 +45,22 @@ datasources:
         spanStartTimeShift: -5m
         spanEndTimeShift: 5m
         filterByTraceID: true
+        # Span service.name -> the Loki label Alloy sets (service = compose service name).
+        tags:
+          - key: service.name
+            value: service
+
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
+        tags:
+          - key: service.name
+            value: service
