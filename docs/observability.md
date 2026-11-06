@@ -104,20 +104,94 @@ Every log line also carries `[traceId,spanId]` after the correlationId:
 WARN 1 --- [identity-service] [nio-8080-exec-2] [b76d46ee-654b-4484-b481-39a755cd6b11] [fae888b5cb92f5f5f46a5587bd4f8f49,4e77f5a79774d381] ... : Login rejected: invalid credentials
 ```
 
-A trace covers one HTTP request. Wallet carries `traceparent` in the AMQP headers and its listeners continue an incoming
-trace (wallet-service README), but the saga is still not one trace: Transfer's outbox relay publishes later, on another
-thread, and the outbox row does not keep the trace context. Follow a transfer across Transfer, Wallet, Audit and
-Notification by its `correlationId`, which every message carries (spec.md §4.1). Notification has no HTTP API, so it sends
-no traces.
+Wallet and Transfer carry `traceparent` in the AMQP headers of every message they publish (never in the §4.1 envelope),
+and their listeners continue the trace of the message they consume. The saga is still **several traces, not one**: each
+outbox relay publishes later, on its own thread, and the outbox row does not keep the trace context. The traces of one
+transfer are found by its `transfer.id` tag (below), and its log lines by its `correlationId` (spec.md §4.1).
+Notification sends no traces.
 
-In Grafana, open a log line in **Explore → Loki** and click the **traceId** link to see its trace in Tempo; from a
-trace, **Logs for this span** goes back to Loki. A service adds tracing with two dependencies in `app-service`:
-`io.micrometer:micrometer-tracing-bridge-otel` and `io.opentelemetry:opentelemetry-exporter-otlp`, plus the log
-pattern above.
+```
+trace 1  api-gateway        http post /transfers
+         └─ transfer-service   http post /transfers
+            └─ transfer-service   saga NONE -> PENDING                 (transfer.saga.transition)
+trace 2  transfer-service   <exchange> send                          (relay publishes DebitWallet)
+         └─ wallet-service     wallet.commands.q receive             (wallet.* tags)
+trace 3  wallet-service     <exchange> send                          (relay publishes WalletDebited)
+         └─ transfer-service   transfer.wallet-events.q receive
+            └─ transfer-service   saga PENDING -> DEBITED
+...      one trace per command and one per result, until the transfer ends
+```
 
-The same traces are also in **Jaeger** (http://localhost:16686): Alloy exports each trace to both Tempo and
-Jaeger. Pick a service and **Find Traces**; **System Architecture** draws the dependencies between services. Jaeger keeps
-the traces in memory, so they are gone after the container restarts. The log-to-trace link in Grafana goes to Tempo.
+Alloy drops the spans of `@Scheduled` runs (`task ...`) and of `/actuator/health` and `/actuator/prometheus`
+(`infra/observability/alloy/config.alloy`), and Wallet and Transfer open no observation for their scheduled runs, so the
+relays and the sweeper do not bury the real traces. A sweeper step still opens its own `transfer.saga.transition` span.
+
+### Saga tags
+
+Observability only: the spec does not define these tags. No tag or event carries amounts, emails, tokens or contact data.
+
+`transfer.saga.transition` (Transfer): one span per saga transition, wrapping the real work, named
+`saga <from> -> <to>`. It is also a timer metric with the same low-cardinality tags.
+
+| Tag | Cardinality | Values |
+|---|---|---|
+| `transfer.status.from` | low | `NONE` (creation), `PENDING`, `DEBITED`, `COMPENSATING`, ... |
+| `transfer.status.to` | low | `PENDING`, `DEBITED`, `COMPLETED`, `REJECTED`, `COMPENSATING`, `REVERSED` |
+| `saga.trigger` | low | `CreateTransfer`, `WalletDebited`, `DebitRejected`, `WalletCredited`, `CreditFailed`, `DebitReversed`, `PENDING_TIMEOUT`, `CREDIT_TIMEOUT`, `REVERSE_RESEND` |
+| `transfer.failure_reason` | low | `INSUFFICIENT_FUNDS`, `SENDER_WALLET_NOT_FOUND`, `RECIPIENT_WALLET_NOT_FOUND`, `CREDIT_TIMEOUT` or `none` |
+| `saga.credit.attempt` | low | the `CreditWallet` attempt sent (`1`..`3`) when the transfer is `DEBITED` after the step, else `none` |
+| `saga.ignored` | low | `true` for a result rule 9 ignores (`from` = `to`), else `false` |
+| `transfer.id`, `correlation.id` | high (span only) | UUIDs |
+
+Every low-cardinality tag is always present (`none` until known), so all series of the timer have the same keys.
+
+Listener spans (`... receive`): high-cardinality tags only, so the `spring.rabbit.listener` metric does not change.
+
+| Span | Tags |
+|---|---|
+| Transfer, `transfer.wallet-events.q` | `transfer.id`, `message.type` |
+| Wallet, `wallet.commands.q` | `transfer.id`, `message.type`, `wallet.operation` (`DEBIT`, `CREDIT`, `REVERSAL`), `wallet.result` (the result emitted), `wallet.settlement` (`CLAIMED`, `ALREADY_CREDITED`, `ALREADY_REVERSED`, `NOT_APPLICABLE`), `wallet.replayed` (`true` when `processed_messages` answered a repeated command) |
+
+**Span events.** The INFO and WARN lines of the saga use cases are also events of the current span, with the same text
+as in Loki (Transfer: `CreateTransferUseCase`, `HandleWalletResultUseCase`, `SweepTimeoutsUseCase`; Wallet:
+`DebitWalletUseCase`, `CreditWalletUseCase`, `ReverseDebitUseCase`). ERROR lines are left out. In Jaeger they are the
+**Logs** of the span, for example `CreditFailed: DEBITED -> COMPENSATING messageId=... correlationId=... transferId=...`.
+
+### Finding a transfer
+
+**Jaeger** (http://localhost:16686): pick a **Service**, put the tags in **Tags** (space-separated) and **Find Traces**.
+
+- Every transition of a transfer: Service `transfer-service`, Tags `transfer.id=<uuid>`.
+- What Wallet did with it: Service `wallet-service`, Tags `transfer.id=<uuid>`.
+- Compensated transfers: Service `transfer-service`, Tags `transfer.status.to=REVERSED`.
+- Ignored late results (rule 9): Service `transfer-service`, Tags `saga.ignored=true`.
+
+**Tempo** (Grafana → Explore → Tempo, TraceQL), across every service at once:
+
+```
+{ span.transfer.id = "<uuid>" }
+{ span.transfer.status.to = "REVERSED" }
+{ resource.service.name = "wallet-service" && span.wallet.result = "CreditFailed" }
+```
+
+Expected `transfer.saga.transition` spans (Transfer) and listener spans (Wallet) for the Feature 4 scenarios:
+
+| Scenario | Transfer (`from -> to`, `saga.trigger`) | Wallet (`wallet.operation` / `wallet.result` / `wallet.settlement`) |
+|---|---|---|
+| F4.1 completed | `NONE -> PENDING` CreateTransfer; `PENDING -> DEBITED` WalletDebited (`saga.credit.attempt=1`); `DEBITED -> COMPLETED` WalletCredited | `DEBIT` / `WalletDebited` / `NOT_APPLICABLE`; `CREDIT` / `WalletCredited` / `CLAIMED` |
+| F4.2 insufficient funds | `NONE -> PENDING` CreateTransfer; `PENDING -> REJECTED` DebitRejected (`transfer.failure_reason=INSUFFICIENT_FUNDS`) | `DEBIT` / `DebitRejected` / `NOT_APPLICABLE` |
+| F4.4 recipient without wallet | `NONE -> PENDING`; `PENDING -> DEBITED` (`saga.credit.attempt=1`); `DEBITED -> COMPENSATING` CreditFailed; `COMPENSATING -> REVERSED` DebitReversed (both with `transfer.failure_reason=RECIPIENT_WALLET_NOT_FOUND`) | `DEBIT` / `WalletDebited` / `NOT_APPLICABLE`; `CREDIT` / `CreditFailed` / `NOT_APPLICABLE`; `REVERSAL` / `DebitReversed` / `CLAIMED` |
+
+### Links between logs and traces
+
+In Grafana, a log line in **Explore → Loki** has links to its trace in **Tempo** (`traceId`) and in **Jaeger**
+(`jaegerTraceId`), and a `transferId` link that shows every log line of that transfer. From a span in Tempo or Jaeger,
+**Logs for this span** goes back to Loki. In the Jaeger UI, each trace has a **Log lines of this trace in Grafana
+(Loki)** link (`infra/observability/jaeger/ui-config.json`). Jaeger keeps the traces in memory, so they are gone after the
+container restarts.
+
+A service adds tracing with two dependencies in `app-service`: `io.micrometer:micrometer-tracing-bridge-otel` and
+`io.opentelemetry:opentelemetry-exporter-otlp`, plus the log pattern above.
 
 ## Alerts
 
