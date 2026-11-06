@@ -16,6 +16,7 @@ import co.com.finova.transfer.model.transfer.SelfTransferNotAllowedException;
 import co.com.finova.transfer.model.transfer.Transfer;
 import co.com.finova.transfer.model.transfer.TransferRequest;
 import co.com.finova.transfer.model.transfer.TransferStatus;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.support.InMemoryPorts;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,7 @@ class CreateTransferUseCaseTest {
 
     private final InMemoryPorts ports = new InMemoryPorts();
     private final CreateTransferUseCase useCase = new CreateTransferUseCase(ports.transferRepository, ports.saga,
-            ports.transactions, ports.ids, ports.clock);
+            ports.transactions, ports.ids, ports.clock, SagaTelemetry.NOOP);
     private final UUID sender = UUID.randomUUID();
     private final UUID recipient = UUID.randomUUID();
     private final UUID key = UUID.randomUUID();
@@ -177,7 +178,7 @@ class CreateTransferUseCaseTest {
             }
         };
         CreateTransferUseCase raced = new CreateTransferUseCase(racing, ports.saga, ports.transactions, ports.ids,
-                ports.clock);
+                ports.clock, SagaTelemetry.NOOP);
 
         CreateTransferUseCase.Result result = raced.handle(request(recipient, HASH), correlationId);
 

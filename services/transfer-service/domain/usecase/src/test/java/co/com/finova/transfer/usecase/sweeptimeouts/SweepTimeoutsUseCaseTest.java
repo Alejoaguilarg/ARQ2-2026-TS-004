@@ -14,6 +14,7 @@ import co.com.finova.transfer.model.transfer.FailureReason;
 import co.com.finova.transfer.model.transfer.Transfer;
 import co.com.finova.transfer.model.transfer.TransferRequest;
 import co.com.finova.transfer.model.transfer.TransferStatus;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.usecase.support.InMemoryPorts;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +33,8 @@ class SweepTimeoutsUseCaseTest {
 
     private final InMemoryPorts ports = new InMemoryPorts();
     private final SweepTimeoutsUseCase sweeper = new SweepTimeoutsUseCase(ports.transferRepository,
-            ports.outboxRepository, ports.saga, ports.transactions, ports.ids, ports.clock, SagaTimeouts.SPEC);
+            ports.outboxRepository, ports.saga, ports.transactions, ports.ids, ports.clock, SagaTimeouts.SPEC,
+            SagaTelemetry.NOOP);
     private final UUID sender = UUID.randomUUID();
     private final UUID recipient = UUID.randomUUID();
 
@@ -173,7 +175,7 @@ class SweepTimeoutsUseCaseTest {
     void aResultThatArrivedAfterTheScanWins() {
         Transfer transfer = stored(pendingSentAt(NOW.minusSeconds(60)).debited(UUID.randomUUID(), NOW.minusSeconds(10)));
         SweepTimeoutsUseCase racing = new SweepTimeoutsUseCase(new RacingRepository(transfer), ports.outboxRepository,
-                ports.saga, ports.transactions, ports.ids, ports.clock, SagaTimeouts.SPEC);
+                ports.saga, ports.transactions, ports.ids, ports.clock, SagaTimeouts.SPEC, SagaTelemetry.NOOP);
         clearOutbox();
 
         assertThat(racing.sweep(10)).isZero();

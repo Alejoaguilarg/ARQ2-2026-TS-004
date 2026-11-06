@@ -6,6 +6,7 @@ import co.com.finova.transfer.model.outbox.OutboxRetryBackoff;
 import co.com.finova.transfer.model.outbox.gateways.OutboxRelayRepository;
 import co.com.finova.transfer.model.outbox.gateways.OutboxRepository;
 import co.com.finova.transfer.model.processedmessage.gateways.ProcessedMessageRepository;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.createtransfer.CreateTransferUseCase;
 import co.com.finova.transfer.usecase.gettransfer.GetTransferUseCase;
@@ -86,6 +87,11 @@ class UseCasesConfigTest {
         @Bean
         TransactionRunner transactionRunner() {
             return mock(TransactionRunner.class);
+        }
+
+        @Bean
+        SagaTelemetry sagaTelemetry() {
+            return SagaTelemetry.NOOP;
         }
     }
 }

@@ -16,8 +16,10 @@ import co.com.finova.transfer.model.message.payload.WalletDebited;
 import co.com.finova.transfer.model.message.payload.WalletResult;
 import co.com.finova.transfer.model.processedmessage.gateways.ProcessedMessageRepository;
 import co.com.finova.transfer.model.transfer.FailureReason;
+import co.com.finova.transfer.model.transfer.SagaTrigger;
 import co.com.finova.transfer.model.transfer.Transfer;
 import co.com.finova.transfer.model.transfer.TransferStatus;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.saga.SagaClock;
 import co.com.finova.transfer.usecase.saga.SagaOutbox;
@@ -53,15 +55,18 @@ public class HandleWalletResultUseCase {
     private final TransactionRunner transactions;
     private final IdGenerator ids;
     private final Clock clock;
+    private final SagaTelemetry telemetry;
 
     public HandleWalletResultUseCase(TransferRepository transfers, ProcessedMessageRepository processedMessages,
-                                     SagaOutbox saga, TransactionRunner transactions, IdGenerator ids, Clock clock) {
+                                     SagaOutbox saga, TransactionRunner transactions, IdGenerator ids, Clock clock,
+                                     SagaTelemetry telemetry) {
         this.transfers = transfers;
         this.processedMessages = processedMessages;
         this.saga = saga;
         this.transactions = transactions;
         this.ids = ids;
         this.clock = clock;
+        this.telemetry = telemetry;
     }
 
     public void handle(MessageEnvelope<?> envelope) {
@@ -84,13 +89,18 @@ public class HandleWalletResultUseCase {
         // The command was published after its transfer committed, so an unknown transfer is never a race.
         Transfer transfer = transfers.lockById(result.transferId()).orElseThrow(() ->
                 new ContractViolationException(name + " for unknown transfer " + result.transferId()));
-        Transfer next = next(transfer, (MessagePayload) result, now);
-        if (next == null) {
-            log(envelope, transfer.transferId(), name + " not expected in " + transfer.status() + ": ignored");
-            return;
-        }
-        transfers.update(next);
-        log(envelope, transfer.transferId(), name + ": " + transfer.status() + " -> " + next.status());
+        telemetry.transition(SagaTrigger.ofResult(envelope.type()), transition -> {
+            Transfer next = next(transfer, (MessagePayload) result, now);
+            if (next == null) {
+                transition.ignored(transfer);
+                log(envelope, transfer.transferId(), name + " not expected in " + transfer.status() + ": ignored");
+                return null;
+            }
+            transfers.update(next);
+            transition.transitioned(transfer, next);
+            log(envelope, transfer.transferId(), name + ": " + transfer.status() + " -> " + next.status());
+            return null;
+        });
     }
 
     /** The transfer after the result, or null when the current status ignores it (rule 9). */

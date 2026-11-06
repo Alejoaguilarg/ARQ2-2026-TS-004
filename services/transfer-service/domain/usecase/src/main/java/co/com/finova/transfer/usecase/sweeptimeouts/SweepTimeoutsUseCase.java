@@ -7,8 +7,10 @@ import co.com.finova.transfer.model.message.payload.AttemptOutcome;
 import co.com.finova.transfer.model.message.payload.AttemptStage;
 import co.com.finova.transfer.model.outbox.gateways.OutboxRepository;
 import co.com.finova.transfer.model.transfer.FailureReason;
+import co.com.finova.transfer.model.transfer.SagaTrigger;
 import co.com.finova.transfer.model.transfer.Transfer;
 import co.com.finova.transfer.model.transfer.TransferStatus;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.saga.SagaClock;
 import co.com.finova.transfer.usecase.saga.SagaOutbox;
@@ -42,9 +44,11 @@ public class SweepTimeoutsUseCase {
     private final IdGenerator ids;
     private final Clock clock;
     private final SagaTimeouts timeouts;
+    private final SagaTelemetry telemetry;
 
     public SweepTimeoutsUseCase(TransferRepository transfers, OutboxRepository outbox, SagaOutbox saga,
-                                TransactionRunner transactions, IdGenerator ids, Clock clock, SagaTimeouts timeouts) {
+                                TransactionRunner transactions, IdGenerator ids, Clock clock, SagaTimeouts timeouts,
+                                SagaTelemetry telemetry) {
         this.transfers = transfers;
         this.outbox = outbox;
         this.saga = saga;
@@ -52,6 +56,7 @@ public class SweepTimeoutsUseCase {
         this.ids = ids;
         this.clock = clock;
         this.timeouts = timeouts;
+        this.telemetry = telemetry;
     }
 
     /** Handles up to batchSize due transfers and returns how many it changed. */
@@ -81,13 +86,25 @@ public class SweepTimeoutsUseCase {
         if (transfer == null || !isDue(transfer, now)) {
             return false;
         }
-        Transfer next = switch (transfer.status()) {
-            case PENDING, COMPENSATING -> republish(transfer, now);
-            case DEBITED -> creditTimedOut(transfer, now);
-            default -> throw new IllegalStateException("a " + transfer.status() + " transfer is never due");
+        return telemetry.transition(trigger(transfer.status()), transition -> {
+            Transfer next = switch (transfer.status()) {
+                case PENDING, COMPENSATING -> republish(transfer, now);
+                case DEBITED -> creditTimedOut(transfer, now);
+                default -> throw new IllegalStateException("a " + transfer.status() + " transfer is never due");
+            };
+            transfers.update(next);
+            transition.transitioned(transfer, next);
+            return true;
+        });
+    }
+
+    // Only PENDING, DEBITED and COMPENSATING are ever due; any other status fails inside the transition.
+    private static SagaTrigger trigger(TransferStatus status) {
+        return switch (status) {
+            case PENDING -> SagaTrigger.PENDING_TIMEOUT;
+            case COMPENSATING -> SagaTrigger.REVERSE_RESEND;
+            default -> SagaTrigger.CREDIT_TIMEOUT;
         };
-        transfers.update(next);
-        return true;
     }
 
     // Checked again under the lock: a Wallet result may have moved the transfer since findDue.

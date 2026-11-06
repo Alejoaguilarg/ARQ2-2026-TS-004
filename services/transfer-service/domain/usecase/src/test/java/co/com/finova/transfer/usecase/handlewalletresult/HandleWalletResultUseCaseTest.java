@@ -27,6 +27,7 @@ import co.com.finova.transfer.model.transfer.FailureReason;
 import co.com.finova.transfer.model.transfer.Transfer;
 import co.com.finova.transfer.model.transfer.TransferRequest;
 import co.com.finova.transfer.model.transfer.TransferStatus;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.usecase.support.InMemoryPorts;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +45,7 @@ class HandleWalletResultUseCaseTest {
 
     private final InMemoryPorts ports = new InMemoryPorts();
     private final HandleWalletResultUseCase useCase = new HandleWalletResultUseCase(ports.transferRepository,
-            ports.processedRepository, ports.saga, ports.transactions, ports.ids, ports.clock);
+            ports.processedRepository, ports.saga, ports.transactions, ports.ids, ports.clock, SagaTelemetry.NOOP);
     private final UUID sender = UUID.randomUUID();
     private final UUID recipient = UUID.randomUUID();
     private final UUID walletId = UUID.randomUUID();

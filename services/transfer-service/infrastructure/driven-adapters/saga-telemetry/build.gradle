@@ -1,0 +1,6 @@
+dependencies {
+    implementation project(':model')
+    implementation 'org.springframework:spring-context'
+    // SagaTelemetry over the Micrometer Observation API: one observation per saga transition (span + timer).
+    implementation 'io.micrometer:micrometer-observation'
+}

@@ -6,9 +6,11 @@ import co.com.finova.transfer.model.message.payload.AttemptOutcome;
 import co.com.finova.transfer.model.message.payload.AttemptStage;
 import co.com.finova.transfer.model.transfer.DuplicateIdempotencyKeyException;
 import co.com.finova.transfer.model.transfer.IdempotencyKeyReusedException;
+import co.com.finova.transfer.model.transfer.SagaTrigger;
 import co.com.finova.transfer.model.transfer.SelfTransferNotAllowedException;
 import co.com.finova.transfer.model.transfer.Transfer;
 import co.com.finova.transfer.model.transfer.TransferRequest;
+import co.com.finova.transfer.model.transfer.gateways.SagaTelemetry;
 import co.com.finova.transfer.model.transfer.gateways.TransferRepository;
 import co.com.finova.transfer.usecase.saga.SagaClock;
 import co.com.finova.transfer.usecase.saga.SagaOutbox;
@@ -37,14 +39,16 @@ public class CreateTransferUseCase {
     private final TransactionRunner transactions;
     private final IdGenerator ids;
     private final Clock clock;
+    private final SagaTelemetry telemetry;
 
     public CreateTransferUseCase(TransferRepository transfers, SagaOutbox saga, TransactionRunner transactions,
-                                 IdGenerator ids, Clock clock) {
+                                 IdGenerator ids, Clock clock, SagaTelemetry telemetry) {
         this.transfers = transfers;
         this.saga = saga;
         this.transactions = transactions;
         this.ids = ids;
         this.clock = clock;
+        this.telemetry = telemetry;
     }
 
     /** The created transfer, or the existing one with replayed = true. */
@@ -98,14 +102,17 @@ public class CreateTransferUseCase {
                     correlationId, now);
             return new Decision(null, Rejection.SELF_TRANSFER);
         }
-        Transfer transfer = Transfer.create(request, ids.newId(), correlationId, ids.newId(), now);
-        transfers.insert(transfer);
-        saga.sendCommand(transfer, now);
-        saga.audit(transfer, AttemptStage.REQUEST, AttemptOutcome.ACCEPTED, null, transfer.senderUserId(), ACCEPTED,
-                now);
-        LOG.log(System.Logger.Level.INFO, () -> "Transfer accepted as PENDING, DebitWallet in the outbox"
-                + " correlationId=" + correlationId + " transferId=" + transfer.transferId());
-        return new Decision(new Result(transfer, false), null);
+        return telemetry.transition(SagaTrigger.CREATE_TRANSFER, transition -> {
+            Transfer transfer = Transfer.create(request, ids.newId(), correlationId, ids.newId(), now);
+            transfers.insert(transfer);
+            saga.sendCommand(transfer, now);
+            saga.audit(transfer, AttemptStage.REQUEST, AttemptOutcome.ACCEPTED, null, transfer.senderUserId(),
+                    ACCEPTED, now);
+            transition.transitioned(null, transfer);
+            LOG.log(System.Logger.Level.INFO, () -> "Transfer accepted as PENDING, DebitWallet in the outbox"
+                    + " correlationId=" + correlationId + " transferId=" + transfer.transferId());
+            return new Decision(new Result(transfer, false), null);
+        });
     }
 
     private Decision replay(Transfer existing, TransferRequest request, UUID correlationId, Instant now) {

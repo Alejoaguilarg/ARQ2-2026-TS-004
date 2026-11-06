@@ -26,3 +26,5 @@ include ':outbox-relay'
 project(':outbox-relay').projectDir = file('./infrastructure/entry-points/outbox-relay')
 include ':saga-sweeper'
 project(':saga-sweeper').projectDir = file('./infrastructure/entry-points/saga-sweeper')
+include ':saga-telemetry'
+project(':saga-telemetry').projectDir = file('./infrastructure/driven-adapters/saga-telemetry')
